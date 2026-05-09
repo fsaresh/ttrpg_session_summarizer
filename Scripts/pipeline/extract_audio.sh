@@ -2,10 +2,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/_lib.sh"
+source "$SCRIPT_DIR/../_lib.sh"
 
-SRC_DIR="$OBS_DIR/Recordings"
-DST_DIR="$OBS_DIR/Audio"
+SRC_DIR="$WORKSPACE_DIR/Recordings"
+DST_DIR="$WORKSPACE_DIR/Audio"
 
 # See README "Tier 0: extract_audio" for tuning notes on the silence trim.
 SILENCE_THRESHOLD="${SILENCE_THRESHOLD:--40dB}"
@@ -29,6 +29,12 @@ shopt -u nullglob
 
 if [[ ${#mp4_files[@]} -eq 0 ]]; then
   log "No mp4 files found in $SRC_DIR"
+  shopt -s nullglob
+  audio_present=("$DST_DIR"/*.wav "$DST_DIR"/*.m4a "$DST_DIR"/*.mp3 "$DST_DIR"/*.flac "$DST_DIR"/*.ogg "$DST_DIR"/*.aac)
+  shopt -u nullglob
+  if [[ ${#audio_present[@]} -gt 0 ]]; then
+    log "(${#audio_present[@]} audio file(s) already in $DST_DIR — Stage 1 is a no-op when starting from audio directly. Stage 2 will pick those up.)"
+  fi
   exit 0
 fi
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 #
-# Clear all derived artifacts (audio, transcripts, summaries) for a given
-# session — useful when you want to rerun the pipeline from scratch on a
-# specific session. The original .mp4 in Recordings/ is never touched.
+# Clear derived artifacts (transcripts, summaries) for a given session —
+# useful when you want to rerun Stages 2-4 from scratch on a specific
+# session. The original .mp4 in Recordings/ and the extracted .wav in
+# Audio/ are never touched: regenerating the .wav is slow (ffmpeg has to
+# re-process the full mp4) and unnecessary unless the extraction params
+# changed. If you need to reset the .wav too, delete it manually.
 #
 # Argument is a glob prefix matched against the session filename stem, so:
 #   2026-04-21_19-51-46   → exactly that session
@@ -14,14 +17,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/_lib.sh"
+source "$SCRIPT_DIR/../_lib.sh"
 
 if [[ $# -lt 1 ]]; then
   cat >&2 <<EOF
 Usage: $(basename "$0") <session-id-or-prefix> [-y|--yes|-l|--list]
 
-Clears Audio, Transcripts, and Summaries entries for the given session.
-Keeps the original .mp4 in Recordings/.
+Clears Transcripts/ and Summaries/ entries for the given session.
+Keeps the original .mp4 in Recordings/ and the extracted .wav in Audio/.
 
 Examples:
   $(basename "$0") 2026-04-21_19-51-46    # specific session
@@ -50,17 +53,15 @@ if [[ ! "$PATTERN" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
 fi
 
 shopt -s nullglob
-audio=("$OBS_DIR/Audio/${PATTERN}"*.wav)
-srts=("$OBS_DIR/Transcripts/${PATTERN}"*.srt)
-txts=("$OBS_DIR/Transcripts/${PATTERN}"*.txt)
-jsons=("$OBS_DIR/Transcripts/${PATTERN}"*.json)
-mds=("$OBS_DIR/Summaries/${PATTERN}"*.md)
+srts=("$WORKSPACE_DIR/Transcripts/${PATTERN}"*.srt)
+txts=("$WORKSPACE_DIR/Transcripts/${PATTERN}"*.txt)
+jsons=("$WORKSPACE_DIR/Transcripts/${PATTERN}"*.json)
+mds=("$WORKSPACE_DIR/Summaries/${PATTERN}"*.md)
 shopt -u nullglob
 
 # bash 3.2 (macOS default) treats "${empty_array[@]}" as an unbound-variable
 # error under `set -u`, so build all_files conditionally.
 all_files=()
-[[ ${#audio[@]} -gt 0 ]] && all_files+=("${audio[@]}")
 [[ ${#srts[@]}  -gt 0 ]] && all_files+=("${srts[@]}")
 [[ ${#txts[@]}  -gt 0 ]] && all_files+=("${txts[@]}")
 [[ ${#jsons[@]} -gt 0 ]] && all_files+=("${jsons[@]}")
@@ -68,7 +69,7 @@ all_files=()
 
 if [[ ${#all_files[@]} -eq 0 ]]; then
   echo "No derived files found for pattern: $PATTERN"
-  echo "(Recordings/ is never touched)"
+  echo "(Recordings/ and Audio/ are never touched)"
   exit 0
 fi
 
@@ -85,7 +86,7 @@ for f in "${all_files[@]}"; do
   echo "  $f"
 done
 echo
-echo "(Recordings/${PATTERN}*.mp4 will NOT be touched.)"
+echo "(Recordings/${PATTERN}*.mp4 and Audio/${PATTERN}*.wav will NOT be touched.)"
 echo
 
 if [[ "$ASSUME_YES" != "true" ]]; then

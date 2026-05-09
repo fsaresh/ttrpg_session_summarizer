@@ -2,9 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/_lib.sh"
+source "$SCRIPT_DIR/../_lib.sh"
 
-WORK_DIR="$OBS_DIR/Transcripts"
+WORK_DIR="$WORKSPACE_DIR/Transcripts"
 
 # See README "Tier 2: clean_transcript" for tuning notes.
 DEDUPE_WINDOW="${DEDUPE_WINDOW:-8}"

@@ -2,18 +2,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/_lib.sh"
+source "$SCRIPT_DIR/../_lib.sh"
 
-SRC_DIR="$OBS_DIR/Transcripts"
-DST_DIR="$OBS_DIR/Summaries"
+SRC_DIR="$WORKSPACE_DIR/Transcripts"
+DST_DIR="$WORKSPACE_DIR/Summaries"
 
 # See README "Tier 3: summarize_session" for setup, model choice, and tuning.
 MODEL="${MODEL:-qwen2.5:32b-instruct-q4_K_M}"
 NUM_CTX="${NUM_CTX:-65536}"
 TEMPERATURE="${TEMPERATURE:-0.3}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
-NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/names.txt}"
-VARIANTS_FILE="${VARIANTS_FILE:-$SCRIPT_DIR/name_variants.txt}"
+NAMES_FILE="${NAMES_FILE:-$SCRIPTS_DIR/names.txt}"
+VARIANTS_FILE="${VARIANTS_FILE:-$SCRIPTS_DIR/name_variants.txt}"
 
 SYSTEM_PROMPT='You are a transcription analyst for a tabletop RPG campaign. You receive a cleaned plain-text transcript of a recently played game session. Your job is to extract a structured outline of what happened — NOT to write polished narrative prose. Your output is the input to a downstream pass that handles prose synthesis.
 
@@ -79,7 +79,7 @@ txt_files=("$SRC_DIR"/*.txt)
 shopt -u nullglob
 
 if [[ ${#txt_files[@]} -eq 0 ]]; then
-  log "No .txt files found in $SRC_DIR (run transcript_cleaner.sh first)"
+  log "No .txt files found in $SRC_DIR (run clean_transcript.sh first)"
   exit 0
 fi
 

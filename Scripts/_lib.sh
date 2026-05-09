@@ -7,9 +7,16 @@
 # Base directory for the pipeline. All pipeline subdirectories
 # (Recordings/, Audio/, Transcripts/, Summaries/) live under this. Override
 # in your environment to relocate the pipeline:
-#   export OBS_DIR=/path/to/your/OBS
+#   export WORKSPACE_DIR=/path/to/your/OBS
 # Default targets the original maintainer's setup; change here if forking.
-OBS_DIR="${OBS_DIR:-$HOME/Movies/OBS}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Movies/OBS}"
+
+# Directory containing this _lib.sh — i.e., the canonical Scripts/ root.
+# Pipeline and utility scripts (which live in Scripts/pipeline/ and
+# Scripts/utils/ respectively) use this to locate shared data files like
+# names.txt and name_variants.txt regardless of where the calling script
+# itself lives.
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Wall-clock timestamp (HH:MM:SS).
 ts() { date +%H:%M:%S; }

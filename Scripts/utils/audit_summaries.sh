@@ -5,11 +5,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/_lib.sh"
+source "$SCRIPT_DIR/../_lib.sh"
 
-SUMMARIES_DIR="${SUMMARIES_DIR:-$OBS_DIR/Summaries}"
-NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/names.txt}"
-VARIANTS_FILE="${VARIANTS_FILE:-$SCRIPT_DIR/name_variants.txt}"
+SUMMARIES_DIR="${SUMMARIES_DIR:-$WORKSPACE_DIR/Summaries}"
+NAMES_FILE="${NAMES_FILE:-$SCRIPTS_DIR/names.txt}"
+VARIANTS_FILE="${VARIANTS_FILE:-$SCRIPTS_DIR/name_variants.txt}"
 
 if [[ ! -d "$SUMMARIES_DIR" ]]; then
   logerr "Error: summaries directory does not exist: $SUMMARIES_DIR"

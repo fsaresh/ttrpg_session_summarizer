@@ -2,10 +2,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/_lib.sh"
+source "$SCRIPT_DIR/../_lib.sh"
 
-SRC_DIR="$OBS_DIR/Audio"
-DST_DIR="$OBS_DIR/Transcripts"
+SRC_DIR="$WORKSPACE_DIR/Audio"
+DST_DIR="$WORKSPACE_DIR/Transcripts"
 
 # See README "Tier 1: transcribe_audio" for model choices and tuning notes.
 MODEL_PATH="${MODEL_PATH:-$HOME/source/external/whisper_models/ggml-large-v3.bin}"
@@ -13,7 +13,7 @@ WORD_THRESHOLD="${WORD_THRESHOLD:-0.95}"
 ENTROPY_THRESHOLD="${ENTROPY_THRESHOLD:-3.0}"
 TEMPERATURE_INC="${TEMPERATURE_INC:-0.5}"
 THREADS="${THREADS:-8}"
-NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/names.txt}"
+NAMES_FILE="${NAMES_FILE:-$SCRIPTS_DIR/names.txt}"
 
 if ! command -v whisper-cli >/dev/null 2>&1; then
   logerr "Error: whisper-cli not found. Install with: brew install whisper-cpp"
