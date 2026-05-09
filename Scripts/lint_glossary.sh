@@ -59,7 +59,7 @@ else
   process_findings < <(awk -v file="$VARIANTS_FILE" -v canon_file="$canonicals_tmp" '
     function known(word,    s) {
       if (word in canonical) return 1
-      # Tolerate simple plurals — "Stargazers" matches canonical "Stargazer".
+      # Tolerate simple plurals — e.g. "Wardens" matches canonical "Warden".
       if (length(word) > 1 && substr(word, length(word)) == "s") {
         s = substr(word, 1, length(word) - 1)
         if (s in canonical) return 1

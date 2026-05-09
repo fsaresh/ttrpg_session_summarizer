@@ -15,7 +15,7 @@ OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/names.txt}"
 VARIANTS_FILE="${VARIANTS_FILE:-$SCRIPT_DIR/name_variants.txt}"
 
-SYSTEM_PROMPT='You are a transcription analyst for a Pathfinder 2E tabletop RPG campaign. You receive a cleaned plain-text transcript of a recently played game session. Your job is to extract a structured outline of what happened — NOT to write polished narrative prose. Your output is the input to a downstream pass that handles prose synthesis.
+SYSTEM_PROMPT='You are a transcription analyst for a tabletop RPG campaign. You receive a cleaned plain-text transcript of a recently played game session. Your job is to extract a structured outline of what happened — NOT to write polished narrative prose. Your output is the input to a downstream pass that handles prose synthesis.
 
 Output format (markdown):
 
@@ -94,7 +94,7 @@ NAMES_PREAMBLE=""
 NAMES_TAIL=""
 NAMES_LIST=$(read_names "$NAMES_FILE")
 if [[ -n "$NAMES_LIST" ]]; then
-  NAMES_PREAMBLE="The transcript below was produced by an automated speech-to-text system and contains many mistranscriptions of names from this campaign. The following list is the canonical, authoritative spellings — these are the only acceptable forms. You MUST normalize every variant, homophone, or near-spelling encountered in the transcript to the canonical form shown here. For example, if the transcript writes \"Perry\" but the glossary lists \"Peri\", output \"Peri\". Do not preserve transcript variants of glossary names; do not invent new variants. Names not in the glossary should be preserved as written.
+  NAMES_PREAMBLE="The transcript below was produced by an automated speech-to-text system and contains many mistranscriptions of names from this campaign. The following list is the canonical, authoritative spellings — these are the only acceptable forms. You MUST normalize every variant, homophone, or near-spelling encountered in the transcript to the canonical form shown here. For example, if the transcript writes \"Phoenix\" but the glossary lists \"Phaenix\", output \"Phaenix\". Do not preserve transcript variants of glossary names; do not invent new variants. Names not in the glossary should be preserved as written.
 
 Glossary:
 $NAMES_LIST

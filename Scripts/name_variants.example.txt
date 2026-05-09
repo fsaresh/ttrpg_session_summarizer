@@ -1,0 +1,35 @@
+# Variant -> canonical mappings used by session_summarizer.sh to fix residual
+# mistranscriptions in the LLM-generated summary. Whisper's --prompt glossary
+# (names.txt) catches most name errors at transcription time; this file mops
+# up the ones that survive into the summary because the model echoed transcript
+# variants instead of normalizing.
+#
+# This file is the template; copy it to name_variants.txt before your first run:
+#   cp Scripts/name_variants.example.txt Scripts/name_variants.txt
+# Then replace the placeholder rules below with your campaign's real
+# observed mistranscriptions. name_variants.txt itself is gitignored — it
+# stays local to your machine.
+#
+# Format: <variant> -> <canonical>
+#   - Lines starting with `#` and blank lines are ignored.
+#   - Matches are whole-word and case-insensitive by default.
+#   - Prefix a variant with `!` to require a capitalized initial letter — use
+#     for variants that are also common English words so ordinary prose isn't
+#     rewritten (e.g. `!Phoenix -> Phaenix` rewrites the name "Phoenix" but
+#     leaves the word "phoenix" untouched).
+#
+# Workflow:
+#   1. After each session_summarizer.sh run, run audit_summaries.sh.
+#   2. Anything reported under "LEAKED VARIANTS" is a candidate for a new rule.
+#   3. Add the rule here and (optionally) re-apply the post-pass to the summary
+#      via apply_name_variants in _lib.sh, or simply re-run the summarizer.
+#   4. Run lint_glossary.sh to validate the file before committing.
+
+# A common-word collision: capitalized-only match so prose isn't rewritten.
+!Phoenix -> Phaenix
+
+# A pure mistranscription: full case-insensitive replacement.
+Bridewell -> Brydhwell
+
+# A multi-word mistranscription: handled the same way.
+Lord Example -> Lord Exemplar

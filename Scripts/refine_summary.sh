@@ -17,7 +17,7 @@ OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 NAMES_FILE="${NAMES_FILE:-$SCRIPT_DIR/names.txt}"
 VARIANTS_FILE="${VARIANTS_FILE:-$SCRIPT_DIR/name_variants.txt}"
 
-REFINE_SYSTEM_PROMPT='You are a transcription analyst reviewing a draft session outline for a Pathfinder 2E tabletop RPG campaign. You receive two inputs:
+REFINE_SYSTEM_PROMPT='You are a transcription analyst reviewing a draft session outline for a tabletop RPG campaign. You receive two inputs:
 1. A draft outline produced from the transcript by an automated first pass.
 2. The full cleaned transcript that the draft was built from.
 

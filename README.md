@@ -59,15 +59,17 @@ $OBS_DIR/
     ├── audit_summaries.sh      ← report canonical-name and leaked-variant counts per summary; surfaces gaps in name_variants.txt
     ├── lint_glossary.sh        ← validate names.txt and name_variants.txt for duplicates, malformed rules, unknown canonicals
     ├── clear_session.sh        ← delete derived artifacts for a session (keeps the .mp4); supports --list and --yes
-    ├── names.txt               ← campaign-specific canonical proper nouns (see "Names glossary" below)
-    └── name_variants.txt       ← campaign-specific variant→canonical rewrites for the summarizer post-pass
+    ├── names.example.txt       ← shipped template for names.txt
+    ├── name_variants.example.txt ← shipped template for name_variants.txt
+    ├── names.txt               ← campaign-specific canonical proper nouns (gitignored; copy from .example.txt)
+    └── name_variants.txt       ← campaign-specific variant→canonical rewrites (gitignored; copy from .example.txt)
 ```
 
 ## Names glossary
 
 `Scripts/names.txt` holds canonical spellings of campaign proper nouns (PCs, NPCs, locations, etc.). Both Stage 2 and Stage 4 use it to keep names consistent across runs:
 
-- **`audio_transcriber.sh`** passes the glossary to whisper.cpp via `--prompt` (with `--carry-initial-prompt` so the bias persists across all 30-second decode chunks). Whisper is much more likely to produce *Vholara Pholaren* instead of *Valara Falarin* when the name is in the prompt.
+- **`audio_transcriber.sh`** passes the glossary to whisper.cpp via `--prompt` (with `--carry-initial-prompt` so the bias persists across all 30-second decode chunks). Whisper is much more likely to produce, e.g., *Aelthorin Brydhwell* (canonical) instead of *Althoran Bridewell* (a plausible-English mistranscription) when the canonical spelling is in the prompt.
 - **`session_summarizer.sh`** prepends the names list to the LLM's user message with a directive to normalize any variant spellings it still encounters. This catches things whisper got wrong despite the prompt bias.
 
 **File format:** one name per line. Blank lines and `#`-comment lines are ignored. Add freely as new characters and locations enter play — a fuller glossary is strictly better.
@@ -77,9 +79,9 @@ $OBS_DIR/
 
 ### Variant -> canonical post-pass
 
-`Scripts/name_variants.txt` is a deterministic backstop applied by `session_summarizer.sh` after the LLM returns. Even with the glossary in the user message, the model sometimes echoes transcript variants verbatim — particularly when a wrong form is also a real English word (`Perry`, `Serene`) and the model has a strong prior on it. The post-pass rewrites known mistranscriptions to their canonical form via word-boundary substitution.
+`Scripts/name_variants.txt` is a deterministic backstop applied by `session_summarizer.sh` after the LLM returns. Even with the glossary in the user message, the model sometimes echoes transcript variants verbatim — particularly when a wrong form is also a real English word (e.g. `Phoenix` when the canonical is `Phaenix`) and the model has a strong prior on the common-English spelling. The post-pass rewrites known mistranscriptions to their canonical form via word-boundary substitution.
 
-**File format:** one rule per line, `<variant> -> <canonical>`. Matches are whole-word and case-insensitive by default. Prefix a variant with `!` to require a capitalized initial letter — use this for variants that double as common English words so ordinary prose isn't rewritten (e.g., `!Serene -> Sareen` rewrites the name "Serene" but leaves the adjective "serene" alone). Lines starting with `#` and blank lines are ignored.
+**File format:** one rule per line, `<variant> -> <canonical>`. Matches are whole-word and case-insensitive by default. Prefix a variant with `!` to require a capitalized initial letter — use this for variants that double as common English words so ordinary prose isn't rewritten (e.g., `!Phoenix -> Phaenix` rewrites the name "Phoenix" but leaves the mythological-creature word "phoenix" alone). Lines starting with `#` and blank lines are ignored.
 
 Add new rules as new mistranscriptions appear in summaries.
 
@@ -111,30 +113,44 @@ curl -L -o ~/source/external/whisper_models/ggml-large-v3.bin \
 # 5. Ollama summarization model (~20 GB; pulls once, takes a while).
 ollama pull qwen2.5:32b-instruct-q4_K_M
 
-# 6. Populate Scripts/names.txt and Scripts/name_variants.txt with this
-#    campaign's PCs/NPCs/locations and known mistranscriptions. See
-#    "Customizing for your campaign" below.
+# 6. Bootstrap the per-campaign data files from the shipped templates.
+#    Both .example.txt files are tracked in git; the actual names.txt and
+#    name_variants.txt are gitignored so each user's campaign data stays local.
+cp "$OBS_DIR/Scripts/names.example.txt"         "$OBS_DIR/Scripts/names.txt"
+cp "$OBS_DIR/Scripts/name_variants.example.txt" "$OBS_DIR/Scripts/name_variants.txt"
 
-# 7. Drop your first .mp4 into $OBS_DIR/Recordings/ and run:
+# 7. Edit Scripts/names.txt and Scripts/name_variants.txt — replace the
+#    placeholder entries with your campaign's real PCs/NPCs/locations and
+#    any mistranscriptions you've observed. See "Customizing for your
+#    campaign" below for the workflow.
+$EDITOR "$OBS_DIR/Scripts/names.txt"
+$EDITOR "$OBS_DIR/Scripts/name_variants.txt"
+
+# 8. (optional) Validate the data files.
+"$OBS_DIR/Scripts/lint_glossary.sh"
+
+# 9. Drop your first .mp4 into $OBS_DIR/Recordings/ and run the pipeline.
 "$OBS_DIR/Scripts/run_all.sh"
 ```
 
 ## Customizing for your campaign
 
-`Scripts/names.txt` and `Scripts/name_variants.txt` are **campaign-specific data files**. The repo ships them populated for the maintainer's current campaign — when you fork this for your own campaign, replace their contents.
+`Scripts/names.txt` and `Scripts/name_variants.txt` are **campaign-specific data files** and are gitignored. Each user populates them from the shipped `.example.txt` templates (step 6 of one-time setup) and grows them as their campaign progresses.
 
 `names.txt`:
-- The structure (PCs / NPCs / Locations / Cosmology section comments) is conventional, not enforced; the only required pattern is the `# === Player Characters ===` header (used by future per-PC tooling and lints). Section comments aside, every non-blank, non-`#` line is treated as a canonical name.
+- Format is documented in the file's header comment. Every non-blank, non-`#` line is a canonical name.
+- The section comments (`# === Player Characters ===`, etc.) are conventional and human-helpful but not required by any script.
 - Add names freely as the campaign reveals them. A fuller glossary biases whisper.cpp toward correct spellings on the first pass.
 
 `name_variants.txt`:
-- Start mostly empty (or with seed rules for English-word ambiguities like `!Serene -> Sareen`).
+- Format is documented in the file's header comment.
+- Seed it with English-word ambiguities like `!Phoenix -> Phaenix` and grow it from observed mistranscriptions.
 - After each session, run `Scripts/audit_summaries.sh` — anything reported under "LEAKED VARIANTS" is a candidate for a new rule.
 - Run `Scripts/lint_glossary.sh` after edits to catch typos, duplicates, and rules pointing to canonicals that aren't in `names.txt`.
 
 Other settings tuned to the maintainer's setup that you may want to revisit:
 - `MODEL` and `MODEL_PATH` defaults in `audio_transcriber.sh` and `session_summarizer.sh` — change if you use different whisper / Ollama models.
-- `Scripts/session_summarizer.sh` system prompt — currently tuned for Pathfinder 2E session outlines and a downstream Claude prose-synthesis pass. Other systems / pipelines will want different section structure.
+- `Scripts/session_summarizer.sh` system prompt — currently tuned for TTRPG session outlines and a downstream Claude prose-synthesis pass. Edit the `SYSTEM_PROMPT` shell variable in that script if your game system or output structure needs something different (e.g., different section headings, non-TTRPG use cases).
 
 ## Hardware sizing
 
@@ -278,7 +294,7 @@ MODEL=llama3.3:70b-instruct-q4_K_M ./session_summarizer.sh           # second pa
 
 Drop a session's `Summaries/<session>.md` into a Claude conversation with a directive like:
 
-> *Synthesize this into Nature-party session notes for the Dalelands campaign. Match the tone/voice of existing arc summaries. Respect the player-known vs. GM-only split per the project CLAUDE.md.*
+> *Synthesize this into session notes for my campaign. Match the tone/voice of existing arc summaries in this conversation. Respect the player-known vs. GM-only information split.*
 
 Claude weaves the structured outline into in-voice campaign prose, applies the campaign's themes, and keeps GM-only material out of the player-facing recap. This is the only stage that costs API tokens — Tiers 1 and 2 reduce a 50–100K-token raw transcript to a 1–3K-token outline before the synthesis pass.
 
