@@ -2,6 +2,32 @@
 
 End-to-end workflow for turning OBS-recorded TTRPG sessions into structured outlines that Claude can synthesize into campaign notes.
 
+## Quick start with an AI assistant
+
+If you'd rather not work through the rest of this README yourself, paste the prompt below into Claude Code (or any Claude session with shell + file access) from inside a fresh clone of this repo. It'll read the docs, install dependencies, choose models for your hardware, populate `names.txt`/`name_variants.txt` from your answers, and offer to customize the system prompts:
+
+```
+I just cloned this OBS Session Pipeline repo. Set it up on my machine without making me read the docs.
+
+First, read README.md and CLAUDE.md so you understand the pipeline. Then walk me through setup one question at a time — wait for my answer before moving on. Cover, in order:
+
+1. My OS, RAM, and whether I'm on Apple Silicon. This drives model choices.
+2. Install or verify deps: ffmpeg, whisper-cpp, ollama, jq, perl. For anything missing, give me the exact install command for my OS.
+3. WORKSPACE_DIR location — default is $HOME/Movies/OBS. Confirm or change.
+4. mkdir -p the directory structure under $WORKSPACE_DIR (recordings/, audio/, transcripts/, summaries/, config/, scripts/).
+5. Download the whisper.cpp model and `ollama pull` the LLM that matches my RAM tier per the README's "Hardware sizing" table. Don't assume defaults — ask first.
+6. Copy the templates: config/names.example.txt → names.txt and config/name_variants.example.txt → name_variants.txt. Then ask me for player characters, major NPCs, important locations, and deities/factions/recurring proper nouns. Replace the placeholder entries with what I tell you, under appropriate `# === Section ===` headers.
+7. Ask if I've noticed any specific name mistranscriptions yet (whisper hearing "Perry" instead of "Peri", etc.); if so, add them to name_variants.txt. If not, leave the example rules in place as illustration.
+8. Show me config/summary_prompt.example.txt and ask whether I want to customize it. Reasons to customize: different game system with different conventions, non-TTRPG use case (interview transcripts, podcast notes, etc.), different output section structure. If I want changes, copy to config/summary_prompt.txt and edit it per my answers. Then do the same for config/refine_prompt.example.txt.
+9. Ask if I want to override anything in config/settings.example.conf. Most people skip this — only relevant if I'm not using the default models or if I want to tune the advanced section.
+10. Run scripts/utils/lint_glossary.sh to validate my data files.
+11. Tell me what to do for my first session: where to drop the .mp4 (or audio file), then ./run.sh.
+
+Don't dump everything at once. One topic per question, and pause for my response. If a step needs a long-running command (model downloads, ollama pull), tell me the time estimate up front.
+```
+
+If you'd rather drive setup manually, keep reading — the sections below cover the same ground as a checklist.
+
 ## Pipeline at a glance
 
 ```
