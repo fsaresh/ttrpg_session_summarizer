@@ -22,6 +22,7 @@ The final `.md` outline is hand-carried to a Claude conversation in a campaign-s
 - **Never modify `recordings/*.mp4`.** The source recordings are irreplaceable. ffmpeg's `-i` is the only legitimate access path, and only as a read input.
 - **Preserve idempotency.** Every pipeline stage skips if its output for a given input already exists. Running the chain repeatedly after each session must remain safe and cheap.
 - **Don't break the model-tag suffix on summaries.** Filenames are `<session>--<sanitized-model>.md`. Multiple models can A/B test on the same session because of this; do not flatten back to `<session>.md`.
+- **License is GPL-3.0.** Don't merge code copied from incompatibly-licensed sources (MIT/BSD/Apache are compatible *into* GPL-3.0, but proprietary or non-OSI sources are not). New code added to this repo inherits GPL-3.0 by default.
 
 ## Conventions
 

@@ -420,3 +420,11 @@ Then `./run.sh` (or invoke each `scripts/pipeline/*.sh` stage individually) and 
 **Ollama errors with "model not found".** `ollama pull <model-tag>` (the tag is what's set in `MODEL`, e.g. `qwen2.5:32b-instruct-q4_K_M`).
 
 **Out of memory during summarization.** Drop to a smaller model (`qwen2.5:14b-instruct-q4_K_M`) or lower `NUM_CTX` (e.g. 32768).
+
+---
+
+## License
+
+This project is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE) for the full terms.
+
+In short: you're free to use, study, modify, and redistribute this code. Any derivative work — including a fork shipped as a paid product — must also be released under GPL-3.0, with source available to the people you distribute it to. Closed-source commercial repackaging is not permitted.
