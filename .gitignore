@@ -1,7 +1,7 @@
-Archive/
-Audio/
-Recordings/
-Summaries/
-Transcripts/
-Scripts/names.txt
-Scripts/name_variants.txt
+archive/
+audio/
+recordings/
+summaries/
+transcripts/
+config/names.txt
+config/name_variants.txt

@@ -7,15 +7,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../_lib.sh"
 
-TXT_DIR="$WORKSPACE_DIR/Transcripts"
-MD_DIR="$WORKSPACE_DIR/Summaries"
+TXT_DIR="$WORKSPACE_DIR/transcripts"
+MD_DIR="$WORKSPACE_DIR/summaries"
 
 MODEL="${MODEL:-qwen2.5:32b-instruct-q4_K_M}"
 NUM_CTX="${NUM_CTX:-65536}"
 TEMPERATURE="${TEMPERATURE:-0.2}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
-NAMES_FILE="${NAMES_FILE:-$SCRIPTS_DIR/names.txt}"
-VARIANTS_FILE="${VARIANTS_FILE:-$SCRIPTS_DIR/name_variants.txt}"
+NAMES_FILE="${NAMES_FILE:-$CONFIG_DIR/names.txt}"
+VARIANTS_FILE="${VARIANTS_FILE:-$CONFIG_DIR/name_variants.txt}"
 
 REFINE_SYSTEM_PROMPT='You are a transcription analyst reviewing a draft session outline for a tabletop RPG campaign. You receive two inputs:
 1. A draft outline produced from the transcript by an automated first pass.

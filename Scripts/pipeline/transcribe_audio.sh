@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../_lib.sh"
 
-SRC_DIR="$WORKSPACE_DIR/Audio"
-DST_DIR="$WORKSPACE_DIR/Transcripts"
+AUDIO_DIR="$WORKSPACE_DIR/audio"
+TRANSCRIPT_DIR="$WORKSPACE_DIR/transcripts"
 
 # See README "Tier 1: transcribe_audio" for model choices and tuning notes.
 MODEL_PATH="${MODEL_PATH:-$HOME/source/external/whisper_models/ggml-large-v3.bin}"
@@ -13,7 +13,7 @@ WORD_THRESHOLD="${WORD_THRESHOLD:-0.95}"
 ENTROPY_THRESHOLD="${ENTROPY_THRESHOLD:-3.0}"
 TEMPERATURE_INC="${TEMPERATURE_INC:-0.5}"
 THREADS="${THREADS:-8}"
-NAMES_FILE="${NAMES_FILE:-$SCRIPTS_DIR/names.txt}"
+NAMES_FILE="${NAMES_FILE:-$CONFIG_DIR/names.txt}"
 
 if ! command -v whisper-cli >/dev/null 2>&1; then
   logerr "Error: whisper-cli not found. Install with: brew install whisper-cpp"
@@ -26,19 +26,19 @@ if [[ ! -f "$MODEL_PATH" ]]; then
   exit 1
 fi
 
-if [[ ! -d "$SRC_DIR" ]]; then
-  logerr "Error: source directory does not exist: $SRC_DIR"
+if [[ ! -d "$AUDIO_DIR" ]]; then
+  logerr "Error: source directory does not exist: $AUDIO_DIR"
   exit 1
 fi
 
-mkdir -p "$DST_DIR"
+mkdir -p "$TRANSCRIPT_DIR"
 
 shopt -s nullglob
-audio_files=("$SRC_DIR"/*.m4a "$SRC_DIR"/*.wav "$SRC_DIR"/*.mp3 "$SRC_DIR"/*.flac "$SRC_DIR"/*.ogg "$SRC_DIR"/*.aac)
+audio_files=("$AUDIO_DIR"/*.m4a "$AUDIO_DIR"/*.wav "$AUDIO_DIR"/*.mp3 "$AUDIO_DIR"/*.flac "$AUDIO_DIR"/*.ogg "$AUDIO_DIR"/*.aac)
 shopt -u nullglob
 
 if [[ ${#audio_files[@]} -eq 0 ]]; then
-  log "No audio files found in $SRC_DIR"
+  log "No audio files found in $AUDIO_DIR"
   exit 0
 fi
 
@@ -64,7 +64,7 @@ failed=0
 for src in "${audio_files[@]}"; do
   base=$(basename "$src")
   stem="${base%.*}"
-  dst="$DST_DIR/$stem.srt"
+  dst="$TRANSCRIPT_DIR/$stem.srt"
 
   if [[ -e "$dst" ]]; then
     log "  skip  $stem.srt (already exists)"
@@ -79,7 +79,7 @@ for src in "${audio_files[@]}"; do
       --file "$src" \
       --output-srt \
       --output-json-full \
-      --output-file "$DST_DIR/$stem" \
+      --output-file "$TRANSCRIPT_DIR/$stem" \
       --language en \
       --word-thold "$WORD_THRESHOLD" \
       --suppress-nst \
@@ -91,10 +91,10 @@ for src in "${audio_files[@]}"; do
     transcribed=$((transcribed + 1))
   else
     logerr "  FAIL  $base (see whisper-cli output above)"
-    rm -f "$dst" "$DST_DIR/$stem.json"
+    rm -f "$dst" "$TRANSCRIPT_DIR/$stem.json"
     failed=$((failed + 1))
   fi
 done
 
 log "Done. transcribed=$transcribed skipped=$skipped failed=$failed (total $(fmt_duration $(($(date +%s) - script_start))))"
-log "Output: $DST_DIR"
+log "Output: $TRANSCRIPT_DIR"

@@ -1,6 +1,6 @@
 # Canonical proper nouns for your campaign. This file is the template;
 # copy it to names.txt before your first run:
-#   cp Scripts/names.example.txt Scripts/names.txt
+#   cp config/names.example.txt config/names.txt
 # Then replace the placeholder entries below with your campaign's real names.
 # names.txt itself is gitignored — it stays local to your machine.
 #

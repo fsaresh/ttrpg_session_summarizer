@@ -5,7 +5,7 @@
 # variants instead of normalizing.
 #
 # This file is the template; copy it to name_variants.txt before your first run:
-#   cp Scripts/name_variants.example.txt Scripts/name_variants.txt
+#   cp config/name_variants.example.txt config/name_variants.txt
 # Then replace the placeholder rules below with your campaign's real
 # observed mistranscriptions. name_variants.txt itself is gitignored — it
 # stays local to your machine.

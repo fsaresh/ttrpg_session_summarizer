@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../_lib.sh"
 
-SRC_DIR="$WORKSPACE_DIR/Recordings"
-DST_DIR="$WORKSPACE_DIR/Audio"
+RECORDINGS_DIR="$WORKSPACE_DIR/recordings"
+AUDIO_DIR="$WORKSPACE_DIR/audio"
 
 # See README "Tier 0: extract_audio" for tuning notes on the silence trim.
 SILENCE_THRESHOLD="${SILENCE_THRESHOLD:--40dB}"
@@ -16,24 +16,24 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -d "$SRC_DIR" ]]; then
-  logerr "Error: source directory does not exist: $SRC_DIR"
+if [[ ! -d "$RECORDINGS_DIR" ]]; then
+  logerr "Error: source directory does not exist: $RECORDINGS_DIR"
   exit 1
 fi
 
-mkdir -p "$DST_DIR"
+mkdir -p "$AUDIO_DIR"
 
 shopt -s nullglob
-mp4_files=("$SRC_DIR"/*.mp4)
+mp4_files=("$RECORDINGS_DIR"/*.mp4)
 shopt -u nullglob
 
 if [[ ${#mp4_files[@]} -eq 0 ]]; then
-  log "No mp4 files found in $SRC_DIR"
+  log "No mp4 files found in $RECORDINGS_DIR"
   shopt -s nullglob
-  audio_present=("$DST_DIR"/*.wav "$DST_DIR"/*.m4a "$DST_DIR"/*.mp3 "$DST_DIR"/*.flac "$DST_DIR"/*.ogg "$DST_DIR"/*.aac)
+  audio_present=("$AUDIO_DIR"/*.wav "$AUDIO_DIR"/*.m4a "$AUDIO_DIR"/*.mp3 "$AUDIO_DIR"/*.flac "$AUDIO_DIR"/*.ogg "$AUDIO_DIR"/*.aac)
   shopt -u nullglob
   if [[ ${#audio_present[@]} -gt 0 ]]; then
-    log "(${#audio_present[@]} audio file(s) already in $DST_DIR — Stage 1 is a no-op when starting from audio directly. Stage 2 will pick those up.)"
+    log "(${#audio_present[@]} audio file(s) already in $AUDIO_DIR — Stage 1 is a no-op when starting from audio directly. Stage 2 will pick those up.)"
   fi
   exit 0
 fi
@@ -47,7 +47,7 @@ failed=0
 
 for src in "${mp4_files[@]}"; do
   base=$(basename "$src" .mp4)
-  dst="$DST_DIR/$base.wav"
+  dst="$AUDIO_DIR/$base.wav"
 
   if [[ -e "$dst" ]]; then
     log "  skip  $base.wav (already exists)"
@@ -72,4 +72,4 @@ for src in "${mp4_files[@]}"; do
 done
 
 log "Done. extracted=$extracted skipped=$skipped failed=$failed (total $(fmt_duration $(($(date +%s) - script_start))))"
-log "Output: $DST_DIR"
+log "Output: $AUDIO_DIR"

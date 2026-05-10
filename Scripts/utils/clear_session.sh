@@ -2,8 +2,8 @@
 #
 # Clear derived artifacts (transcripts, summaries) for a given session —
 # useful when you want to rerun Stages 2-4 from scratch on a specific
-# session. The original .mp4 in Recordings/ and the extracted .wav in
-# Audio/ are never touched: regenerating the .wav is slow (ffmpeg has to
+# session. The original .mp4 in recordings/ and the extracted .wav in
+# audio/ are never touched: regenerating the .wav is slow (ffmpeg has to
 # re-process the full mp4) and unnecessary unless the extraction params
 # changed. If you need to reset the .wav too, delete it manually.
 #
@@ -23,8 +23,8 @@ if [[ $# -lt 1 ]]; then
   cat >&2 <<EOF
 Usage: $(basename "$0") <session-id-or-prefix> [-y|--yes|-l|--list]
 
-Clears Transcripts/ and Summaries/ entries for the given session.
-Keeps the original .mp4 in Recordings/ and the extracted .wav in Audio/.
+Clears transcripts/ and summaries/ entries for the given session.
+Keeps the original .mp4 in recordings/ and the extracted .wav in audio/.
 
 Examples:
   $(basename "$0") 2026-04-21_19-51-46    # specific session
@@ -53,10 +53,10 @@ if [[ ! "$PATTERN" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
 fi
 
 shopt -s nullglob
-srts=("$WORKSPACE_DIR/Transcripts/${PATTERN}"*.srt)
-txts=("$WORKSPACE_DIR/Transcripts/${PATTERN}"*.txt)
-jsons=("$WORKSPACE_DIR/Transcripts/${PATTERN}"*.json)
-mds=("$WORKSPACE_DIR/Summaries/${PATTERN}"*.md)
+srts=("$WORKSPACE_DIR/transcripts/${PATTERN}"*.srt)
+txts=("$WORKSPACE_DIR/transcripts/${PATTERN}"*.txt)
+jsons=("$WORKSPACE_DIR/transcripts/${PATTERN}"*.json)
+mds=("$WORKSPACE_DIR/summaries/${PATTERN}"*.md)
 shopt -u nullglob
 
 # bash 3.2 (macOS default) treats "${empty_array[@]}" as an unbound-variable
@@ -69,7 +69,7 @@ all_files=()
 
 if [[ ${#all_files[@]} -eq 0 ]]; then
   echo "No derived files found for pattern: $PATTERN"
-  echo "(Recordings/ and Audio/ are never touched)"
+  echo "(recordings/ and audio/ are never touched)"
   exit 0
 fi
 
@@ -86,7 +86,7 @@ for f in "${all_files[@]}"; do
   echo "  $f"
 done
 echo
-echo "(Recordings/${PATTERN}*.mp4 and Audio/${PATTERN}*.wav will NOT be touched.)"
+echo "(recordings/${PATTERN}*.mp4 and audio/${PATTERN}*.wav will NOT be touched.)"
 echo
 
 if [[ "$ASSUME_YES" != "true" ]]; then

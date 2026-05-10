@@ -4,19 +4,17 @@
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   source "$SCRIPT_DIR/_lib.sh"
 
-# Base directory for the pipeline. All pipeline subdirectories
-# (Recordings/, Audio/, Transcripts/, Summaries/) live under this. Override
-# in your environment to relocate the pipeline:
-#   export WORKSPACE_DIR=/path/to/your/OBS
+# Base directory for the pipeline. All pipeline data subdirectories
+# (recordings/, audio/, transcripts/, summaries/) and the config/ dir live
+# under this. Override in your environment to relocate the pipeline:
+#   export WORKSPACE_DIR=/path/to/your/workspace
 # Default targets the original maintainer's setup; change here if forking.
 WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Movies/OBS}"
 
-# Directory containing this _lib.sh — i.e., the canonical Scripts/ root.
-# Pipeline and utility scripts (which live in Scripts/pipeline/ and
-# Scripts/utils/ respectively) use this to locate shared data files like
-# names.txt and name_variants.txt regardless of where the calling script
-# itself lives.
-SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Per-campaign data files (names.txt, name_variants.txt) live here. Override
+# only if you want to keep multiple campaigns side-by-side or stash config
+# elsewhere; default keeps it next to the data dirs.
+CONFIG_DIR="${CONFIG_DIR:-$WORKSPACE_DIR/config}"
 
 # Wall-clock timestamp (HH:MM:SS).
 ts() { date +%H:%M:%S; }
@@ -60,7 +58,7 @@ read_names() {
 
 # Apply variant -> canonical name substitutions to stdin, writing to stdout.
 # Reads rules from a file in the format described at the top of
-# Scripts/name_variants.txt. If the variants file is missing, this is a
+# config/name_variants.txt. If the variants file is missing, this is a
 # passthrough.
 #   apply_name_variants "$VARIANTS_FILE" <input >output
 apply_name_variants() {
