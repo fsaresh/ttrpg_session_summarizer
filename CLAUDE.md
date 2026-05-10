@@ -28,7 +28,7 @@ The final `.md` outline is hand-carried to a Claude conversation in a campaign-s
 - **Logging**: use `log` / `logerr` from `_lib.sh` (sourced via the `BASH_SOURCE[0]` dance at the top of each pipeline script). Don't introduce raw `echo` / `echo … >&2` for user-facing output — they miss the timestamp prefix and are inconsistent with the rest of the pipeline.
 - **`rm`**: use `command rm -f` to bypass the user's `rm -i` shell alias. Plain `rm` will hang waiting for confirmation that scripts can't deliver.
 - **Atomic writes**: for outputs the script generates itself (cleaner, summarizer), write to `"$dst.tmp"` first and `mv` on success. For outputs from external tools that write the final file directly (ffmpeg, whisper-cli), `rm -f "$dst"` on failure to clean up partials so the next run retries.
-- **Path resolution**: every pipeline subdirectory is derived from `WORKSPACE_DIR`, set in `_lib.sh` (default `$HOME/Movies/OBS`, override via `export WORKSPACE_DIR=...`). Scripts use `RECORDINGS_DIR="$WORKSPACE_DIR/recordings"`, `AUDIO_DIR`, `TRANSCRIPTS_DIR`, `SUMMARIES_DIR`. Per-campaign data files live in `$CONFIG_DIR` (default `$WORKSPACE_DIR/config`); scripts reference them as `$CONFIG_DIR/names.txt` and `$CONFIG_DIR/name_variants.txt`. Never reintroduce a hard-coded absolute path literal in a script — that breaks the new-machine and new-campaign setup paths documented in the README. The defaults live in `_lib.sh`; don't duplicate them elsewhere.
+- **Path resolution + per-machine settings**: all configurable values (`WORKSPACE_DIR`, `CONFIG_DIR`, model paths, model tags, decoder thresholds, etc.) come from `.env` at the repo root, with `.env.example` as fallback when the user hasn't customized. `_lib.sh` sources whichever exists. Scripts then use `RECORDINGS_DIR="$WORKSPACE_DIR/recordings"`, `AUDIO_DIR`, `TRANSCRIPTS_DIR`, `SUMMARIES_DIR`, and reference shared data files as `$CONFIG_DIR/names.txt` / `$CONFIG_DIR/name_variants.txt`. **Never reintroduce a hard-coded absolute path literal in a script** — that breaks new-machine setup. Plain `KEY=value` syntax in `.env` means the file overrides shell-exported env vars; that's intentional, single source of truth.
 - **No Python dependencies.** Stay in Bash plus standard CLI tools (ffmpeg, whisper-cpp, awk, jq, curl, ollama). Whisperx-driven Python dep-hell is why this pipeline exists in its current shape; don't reintroduce it.
 - **Wrapper functions over inline prefix patterns.** When adding cross-cutting behavior across many call sites (logging, timing, formatting), define a helper in `_lib.sh` rather than asking the caller to remember a prefix.
 
@@ -56,6 +56,7 @@ Follow the existing pattern:
 
 ```
 $WORKSPACE_DIR/        README.md, CLAUDE.md, run.sh,
+                       .env (gitignored) + .env.example (tracked),
                        recordings/, audio/, transcripts/, summaries/,
                        config/, scripts/
 recordings/            raw .mp4 (never modified)
@@ -64,11 +65,10 @@ transcripts/           .srt + .json + .txt side by side (whisper.cpp emits .srt+
 summaries/             .md, model-tagged (Ollama). `--refined.md` suffix marks refiner output.
 config/                names.txt + names.example.txt, name_variants.txt + name_variants.example.txt,
                        summary_prompt.txt + summary_prompt.example.txt,
-                       refine_prompt.txt + refine_prompt.example.txt,
-                       settings.conf + settings.example.conf
-                       (the .txt/.conf actuals are gitignored; .example.* are tracked templates;
-                        scripts fall back to .example.* when the actual is missing)
-scripts/               _lib.sh
+                       refine_prompt.txt + refine_prompt.example.txt
+                       (the .txt actuals are gitignored; .example.txt are tracked templates;
+                        scripts fall back to .example.txt when the actual is missing)
+scripts/               _lib.sh (sources .env, defines helpers)
 scripts/pipeline/      extract_audio.sh, transcribe_audio.sh, clean_transcript.sh, summarize_session.sh
 scripts/utils/         refine_summary.sh, audit_summaries.sh, lint_glossary.sh, clear_session.sh
 README.md              operator-facing pipeline docs

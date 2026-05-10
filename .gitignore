@@ -3,8 +3,8 @@ audio/
 recordings/
 summaries/
 transcripts/
+.env
 config/names.txt
 config/name_variants.txt
 config/summary_prompt.txt
 config/refine_prompt.txt
-config/settings.conf

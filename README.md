@@ -19,7 +19,7 @@ First, read README.md and CLAUDE.md so you understand the pipeline. Then walk me
 6. Copy the templates: config/names.example.txt → names.txt and config/name_variants.example.txt → name_variants.txt. Then ask me for player characters, major NPCs, important locations, and deities/factions/recurring proper nouns. Replace the placeholder entries with what I tell you, under appropriate `# === Section ===` headers.
 7. Ask if I've noticed any specific name mistranscriptions yet (whisper hearing "Perry" instead of "Peri", etc.); if so, add them to name_variants.txt. If not, leave the example rules in place as illustration.
 8. Show me config/summary_prompt.example.txt and ask whether I want to customize it. Reasons to customize: different game system with different conventions, non-TTRPG use case (interview transcripts, podcast notes, etc.), different output section structure. If I want changes, copy to config/summary_prompt.txt and edit it per my answers. Then do the same for config/refine_prompt.example.txt.
-9. Ask if I want to override anything in config/settings.example.conf. Most people skip this — only relevant if I'm not using the default models or if I want to tune the advanced section.
+9. Show me the .env.example file at the repo root and ask whether I want to copy it to .env and customize. .env holds model paths, model tags, context size, and decoder thresholds; values there override anything I `export`-ed in my shell. Most people skip this — only relevant if I'm not using the default models or if I want to tune the advanced section.
 10. Run scripts/utils/lint_glossary.sh to validate my data files.
 11. Tell me what to do for my first session: where to drop the .mp4 (or audio file), then ./run.sh.
 
@@ -71,23 +71,23 @@ $WORKSPACE_DIR/
 ├── README.md                 ← this file
 ├── CLAUDE.md                 ← maintainer notes
 ├── run.sh                    ← standard per-session entry point (chains Stages 1–4)
+├── .env.example              ← shipped environment defaults (paths, model choices, tunables)
+├── .env                      ← gitignored; copy from .env.example to customize
 ├── recordings/               ← raw OBS captures (.mp4) — populate yourself (skip if starting from audio)
 ├── audio/                    ← extracted audio (.wav) — created by Stage 1, or populated yourself for audio-only runs
 ├── transcripts/              ← whisper output (.srt + .json) + cleaned plain text (.txt) — created by Stages 2-3
 ├── summaries/                ← Ollama-generated outlines (.md) — created by Stage 4
-├── config/                   ← per-campaign data files, system prompts, and pipeline settings
+├── config/                   ← per-campaign data files and system prompts
 │   ├── names.example.txt        ← shipped template for names.txt
 │   ├── name_variants.example.txt ← shipped template for name_variants.txt
 │   ├── summary_prompt.example.txt ← shipped Stage-4 system prompt (TTRPG-tuned)
 │   ├── refine_prompt.example.txt  ← shipped refiner system prompt
-│   ├── settings.example.conf    ← shipped pipeline-settings template (model paths, thresholds, etc.)
 │   ├── names.txt                ← canonical proper nouns (gitignored; copy from .example.txt to customize)
 │   ├── name_variants.txt        ← variant→canonical rewrites (gitignored; copy from .example.txt to customize)
 │   ├── summary_prompt.txt       ← (gitignored, optional override; scripts fall back to .example.txt if absent)
-│   ├── refine_prompt.txt        ← (gitignored, optional override; scripts fall back to .example.txt if absent)
-│   └── settings.conf            ← (gitignored, optional; sourced by _lib.sh if present)
+│   └── refine_prompt.txt        ← (gitignored, optional override; scripts fall back to .example.txt if absent)
 └── scripts/
-    ├── _lib.sh                  ← shared helpers (logging, duration formatting, names parsing, name-variant rewriter, WORKSPACE_DIR + CONFIG_DIR defaults)
+    ├── _lib.sh                  ← shared helpers (logging, duration formatting, names parsing, name-variant rewriter); sources the .env file
     ├── pipeline/                ← the four core stages — one stage per script, run in order by ../run.sh
     │   ├── extract_audio.sh        ← Stage 1: mp4 → wav
     │   ├── transcribe_audio.sh     ← Stage 2: wav → srt + json (whisper.cpp)
@@ -99,6 +99,8 @@ $WORKSPACE_DIR/
         ├── lint_glossary.sh        ← validate names.txt and name_variants.txt for duplicates, malformed rules, unknown canonicals
         └── clear_session.sh        ← delete Stage 2-4 artifacts for a session (keeps the .mp4 and .wav); supports --list and --yes
 ```
+
+**Configuration model:** `.env.example` at the repo root is a single bash-sourced file holding all paths and tunables (workspace location, model choices, thresholds). On first setup, copy it to `.env` and edit. If you don't create `.env`, `.env.example` is sourced as fallback. Values in `.env` are authoritative — they override any same-named env var in your shell. Edit `.env` to change settings rather than `export`-ing in your shell rc; config lives in one place.
 
 ## Names glossary
 
@@ -132,13 +134,18 @@ brew services start ollama
 # Linux equivalents: apt/dnf install ffmpeg jq perl; build whisper.cpp from source;
 # install Ollama from https://ollama.com/download.
 
-# 2. Choose where the pipeline lives. The default in scripts/_lib.sh is
-#    $HOME/Movies/OBS — accept that, change it there, or override per-shell:
-export WORKSPACE_DIR=/path/to/your/OBS
+# 2. Bootstrap the environment file. .env.example ships with safe defaults;
+#    if you don't create .env, those defaults apply automatically. Copy and
+#    edit only if you want to change paths, models, or tunables.
+cp .env.example .env
+$EDITOR .env   # set WORKSPACE_DIR if you want it somewhere other than $HOME/Movies/OBS
 
-# 3. Create the directory structure.
+# 3. Create the directory structure under your chosen WORKSPACE_DIR.
+#    (If you accepted the default, that's $HOME/Movies/OBS.)
+WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Movies/OBS}"
 mkdir -p "$WORKSPACE_DIR"/{recordings,audio,transcripts,summaries,config,scripts}
-# Then place this repo's scripts/ and config/ contents in $WORKSPACE_DIR/.
+# Then place this repo's scripts/ and config/ contents (and the .env file)
+# in $WORKSPACE_DIR/.
 
 # 4. Whisper.cpp model (~3 GB; large-v3 for best fantasy-name accuracy).
 #    The default lives at $HOME/source/external/whisper_models/. To relocate
@@ -158,8 +165,8 @@ curl -L -o "$WHISPER_MODELS_DIR/ggml-large-v3.bin" \
 ollama pull qwen2.5:32b-instruct-q4_K_M
 
 # 6. Bootstrap the per-campaign data files from the shipped templates.
-#    .example.txt / .example.conf files are tracked in git; the actual
-#    customizable copies are gitignored so each user's data stays local.
+#    .example.txt files are tracked in git; the actual customizable copies
+#    are gitignored so each user's data stays local.
 #
 #    Required (otherwise the pipeline runs with an empty glossary):
 cp "$WORKSPACE_DIR/config/names.example.txt"         "$WORKSPACE_DIR/config/names.txt"
@@ -168,11 +175,12 @@ cp "$WORKSPACE_DIR/config/name_variants.example.txt" "$WORKSPACE_DIR/config/name
 #    Optional — only copy these if you want to customize:
 #      summary_prompt.txt   override the Stage-4 system prompt (e.g. for non-TTRPG)
 #      refine_prompt.txt    override the refine-pass system prompt
-#      settings.conf        override pipeline defaults (model paths, thresholds)
-#    If the .txt or .conf isn't present, scripts use the shipped .example.* file.
+#    If the .txt isn't present, scripts use the shipped .example.txt file.
 # cp "$WORKSPACE_DIR/config/summary_prompt.example.txt" "$WORKSPACE_DIR/config/summary_prompt.txt"
 # cp "$WORKSPACE_DIR/config/refine_prompt.example.txt"  "$WORKSPACE_DIR/config/refine_prompt.txt"
-# cp "$WORKSPACE_DIR/config/settings.example.conf"      "$WORKSPACE_DIR/config/settings.conf"
+#
+# Pipeline-wide settings (model paths, model tags, thresholds, temperatures)
+# live in .env at the repo root — see step 2.
 
 # 7. Edit config/names.txt and config/name_variants.txt — replace the
 #    placeholder entries with your campaign's real PCs/NPCs/locations and
@@ -223,7 +231,7 @@ The session filename used throughout downstream artifacts (`<session-stem>.srt`,
 - Run `scripts/utils/lint_glossary.sh` after edits to catch typos, duplicates, and rules pointing to canonicals that aren't in `names.txt`.
 
 Other settings tuned to the maintainer's setup that you may want to revisit:
-- `config/settings.conf` — model paths, Ollama model tag, context size, and decoder thresholds. Copy from `settings.example.conf` and edit. See "Hardware sizing" for what to choose per RAM tier.
+- `.env` at the repo root — model paths, Ollama model tag, context size, decoder thresholds, and other per-machine settings. Copy from `.env.example` and edit. See "Hardware sizing" for what to choose per RAM tier.
 - `config/summary_prompt.txt` and `config/refine_prompt.txt` — system prompts for Stage 4 and the refine pass, currently tuned for TTRPG session outlines and a downstream Claude prose-synthesis pass. Copy from the shipped `.example.txt` and edit if your game system or output structure needs something different (e.g., different section headings, non-TTRPG use cases). Scripts fall back to the `.example.txt` if you haven't created the override.
 
 ## Hardware sizing
@@ -238,12 +246,13 @@ The shipped defaults (whisper `large-v3` + Ollama `qwen2.5:32b-instruct-q4_K_M` 
 | 32 GB | `ggml-large-v3.bin` (~3 GB) | `qwen2.5:32b-instruct-q4_K_M` (~20 GB) | `65536` | **Shipped defaults.** |
 | 48 GB+ | `ggml-large-v3.bin` | `llama3.3:70b-instruct-q4_K_M` (~40 GB) | `65536`+ | Highest local quality. Still tight at 48 GB unified — close everything else. |
 
-Override per-run instead of editing the scripts:
-```bash
-MODEL_PATH="$HOME/source/external/whisper_models/ggml-large-v3-turbo-q5_0.bin" \
-MODEL=qwen2.5:14b-instruct-q4_K_M \
-NUM_CTX=32768 \
-"$WORKSPACE_DIR/run.sh"
+To switch models, edit `.env` at the repo root — values there take precedence over shell exports, so the file is the single source of truth:
+
+```ini
+# In .env:
+MODEL_PATH=$HOME/source/external/whisper_models/ggml-large-v3-turbo-q5_0.bin
+MODEL=qwen2.5:14b-instruct-q4_K_M
+NUM_CTX=32768
 ```
 
 **Non-Apple-Silicon machines** lose Metal acceleration in `whisper-cli` — expect 0.5–1× realtime on a modern x86 CPU instead of 5–10× realtime on M-series. Smaller whisper models help proportionally; `large-v3-turbo-q5_0` is a good first pick on non-Mac hardware.

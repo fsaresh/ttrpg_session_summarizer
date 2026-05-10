@@ -3,26 +3,31 @@
 # Shared helpers for the OBS pipeline scripts. Source from sibling scripts:
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   source "$SCRIPT_DIR/_lib.sh"
+#
+# This file holds helpers only — logging, duration formatting, and
+# glossary parsing. Workspace paths and per-machine settings come from
+# the .env file at repo root (or .env.example as fallback), sourced below.
 
-# Base directory for the pipeline. All pipeline data subdirectories
-# (recordings/, audio/, transcripts/, summaries/) and the config/ dir live
-# under this. Override in your environment to relocate the pipeline:
-#   export WORKSPACE_DIR=/path/to/your/workspace
-# Default targets the original maintainer's setup; change here if forking.
-WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Movies/OBS}"
+# ---------------------------------------------------------------------------
+# Environment loading
+# ---------------------------------------------------------------------------
 
-# Per-campaign data files (names.txt, name_variants.txt), externalised
-# system prompts (summary_prompt.txt, refine_prompt.txt), and pipeline
-# settings (settings.conf) all live here. Override only if you want to keep
-# multiple campaigns side-by-side or stash config elsewhere; default keeps
-# it next to the data dirs.
-CONFIG_DIR="${CONFIG_DIR:-$WORKSPACE_DIR/config}"
+# Pull in WORKSPACE_DIR, CONFIG_DIR, model paths, and stage tunables from
+# .env at the repo root. If the user hasn't created .env, fall back to
+# .env.example so the pipeline works out of the box with shipped defaults.
+LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${ENV_FILE:-$LIB_DIR/../.env}"
+if [[ ! -f "$ENV_FILE" ]]; then
+  ENV_FILE="$LIB_DIR/../.env.example"
+fi
+if [[ -f "$ENV_FILE" ]]; then
+  source "$ENV_FILE"
+fi
+unset LIB_DIR
 
-# Source per-machine settings if present. settings.conf uses the
-# `: "${VAR:=default}"` pattern, so env vars set in the caller's shell
-# still win — settings.conf only fills in values not already set.
-SETTINGS_FILE="${SETTINGS_FILE:-$CONFIG_DIR/settings.conf}"
-[[ -f "$SETTINGS_FILE" ]] && source "$SETTINGS_FILE"
+# ---------------------------------------------------------------------------
+# Generic helpers
+# ---------------------------------------------------------------------------
 
 # Wall-clock timestamp (HH:MM:SS).
 ts() { date +%H:%M:%S; }
@@ -46,6 +51,10 @@ fmt_duration() {
     printf '%dh%02dm%02ds' $((sec / 3600)) $((sec % 3600 / 60)) $((sec % 60))
   fi
 }
+
+# ---------------------------------------------------------------------------
+# Glossary helpers
+# ---------------------------------------------------------------------------
 
 # Read a names file, emitting one canonical name per line. Skips blanks and
 # lines starting with `#`. Trims surrounding whitespace. Missing file is
