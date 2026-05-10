@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 #
-# See README "Refine pass".
+# Conceptually a stage-4 refinement pass — feeds the original transcript and
+# the first-pass summary back to the LLM with instructions to identify and
+# fill in missed beats. Lives under utils/ rather than pipeline/ because it's
+# opt-in: not run by run.sh, and only useful when you want a second-pass
+# improvement on an existing summary.
+#
+# See README "Refine pass" for full details.
 
 set -euo pipefail
 
@@ -73,7 +79,7 @@ if [[ ${#first_pass[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Build the canonical-names preamble; same shape as summarize_session.sh so
+# Build the canonical-names preamble; same shape as 4_summarize_session.sh so
 # the refiner uses the same name-normalization signal.
 NAMES_PREAMBLE=""
 NAMES_TAIL=""

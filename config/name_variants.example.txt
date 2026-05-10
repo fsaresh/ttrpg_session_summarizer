@@ -1,4 +1,4 @@
-# Variant -> canonical mappings used by pipeline/summarize_session.sh to fix residual
+# Variant -> canonical mappings used by pipeline/4_summarize_session.sh to fix residual
 # mistranscriptions in the LLM-generated summary. Whisper's --prompt glossary
 # (names.txt) catches most name errors at transcription time; this file mops
 # up the ones that survive into the summary because the model echoed transcript
@@ -19,7 +19,7 @@
 #     leaves the word "phoenix" untouched).
 #
 # Workflow:
-#   1. After each pipeline/summarize_session.sh run, run utils/audit_summaries.sh.
+#   1. After each pipeline/4_summarize_session.sh run, run utils/audit_summaries.sh.
 #   2. Anything reported under "LEAKED VARIANTS" is a candidate for a new rule.
 #   3. Add the rule here and (optionally) re-apply the post-pass to the summary
 #      via apply_name_variants in _lib.sh, or simply re-run the summarizer.

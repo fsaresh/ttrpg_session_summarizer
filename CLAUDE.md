@@ -70,8 +70,10 @@ config/                names.txt + names.example.txt, name_variants.txt + name_v
                        (the .txt actuals are gitignored; .example.txt are tracked templates;
                         scripts fall back to .example.txt when the actual is missing)
 scripts/               _lib.sh (sources .env, defines helpers)
-scripts/pipeline/      extract_audio.sh, transcribe_audio.sh, clean_transcript.sh, summarize_session.sh
-scripts/utils/         refine_summary.sh, audit_summaries.sh, lint_glossary.sh, clear_session.sh
+scripts/pipeline/      1_extract_audio.sh, 2_transcribe_audio.sh, 3_clean_transcript.sh, 4_summarize_session.sh
+scripts/utils/         refine_summary.sh (conceptually a stage-4 refinement pass; opt-in, not run by run.sh),
+                       audit_summaries.sh, lint_glossary.sh, clear_session.sh,
+                       setup_check.sh, status.sh
 README.md              operator-facing pipeline docs
 CLAUDE.md              this file
 ```

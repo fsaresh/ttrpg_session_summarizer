@@ -58,7 +58,7 @@ txt_files=("$TRANSCRIPTS_DIR"/*.txt)
 shopt -u nullglob
 
 if [[ ${#txt_files[@]} -eq 0 ]]; then
-  log "No .txt files found in $TRANSCRIPTS_DIR (run clean_transcript.sh first)"
+  log "No .txt files found in $TRANSCRIPTS_DIR (run 3_clean_transcript.sh first)"
   exit 0
 fi
 

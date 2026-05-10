@@ -11,7 +11,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-"$REPO_DIR/scripts/pipeline/extract_audio.sh"
-"$REPO_DIR/scripts/pipeline/transcribe_audio.sh"
-"$REPO_DIR/scripts/pipeline/clean_transcript.sh"
-"$REPO_DIR/scripts/pipeline/summarize_session.sh"
+"$REPO_DIR/scripts/pipeline/1_extract_audio.sh"
+"$REPO_DIR/scripts/pipeline/2_transcribe_audio.sh"
+"$REPO_DIR/scripts/pipeline/3_clean_transcript.sh"
+"$REPO_DIR/scripts/pipeline/4_summarize_session.sh"

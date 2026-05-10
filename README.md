@@ -32,16 +32,16 @@ If you'd rather drive setup manually, keep reading — the sections below cover 
 
 ```
 recordings/ (.mp4)
-    │  extract_audio.sh          ffmpeg: drop video, downmix to 16 kHz mono PCM, trim trailing silence
+    │  1_extract_audio.sh          ffmpeg: drop video, downmix to 16 kHz mono PCM, trim trailing silence
     ▼
 audio/ (.wav)
-    │  transcribe_audio.sh        whisper.cpp: speech-to-text → SRT
+    │  2_transcribe_audio.sh        whisper.cpp: speech-to-text → SRT
     ▼
 transcripts/ (.srt + .json)
-    │  clean_transcript.sh       strip structure, dedupe loops, mark low-confidence tokens with [?]
+    │  3_clean_transcript.sh       strip structure, dedupe loops, mark low-confidence tokens with [?]
     ▼
 transcripts/ (.txt, alongside .srt and .json)
-    │  summarize_session.sh       local LLM via Ollama: structured-outline extraction
+    │  4_summarize_session.sh       local LLM via Ollama: structured-outline extraction
     ▼
 summaries/ (<session>--<model>.md)
     │  hand to Claude
@@ -54,10 +54,10 @@ After every session, the standard run is:
 ```bash
 "$WORKSPACE_DIR/run.sh"
 # or, equivalently:
-"$WORKSPACE_DIR/scripts/pipeline/extract_audio.sh" && \
-  "$WORKSPACE_DIR/scripts/pipeline/transcribe_audio.sh" && \
-  "$WORKSPACE_DIR/scripts/pipeline/clean_transcript.sh" && \
-  "$WORKSPACE_DIR/scripts/pipeline/summarize_session.sh"
+"$WORKSPACE_DIR/scripts/pipeline/1_extract_audio.sh" && \
+  "$WORKSPACE_DIR/scripts/pipeline/2_transcribe_audio.sh" && \
+  "$WORKSPACE_DIR/scripts/pipeline/3_clean_transcript.sh" && \
+  "$WORKSPACE_DIR/scripts/pipeline/4_summarize_session.sh"
 ```
 
 Every stage is idempotent: if a stage's output for a given session already exists, that session is skipped. Drop a new `.mp4` into `recordings/`, run the chain, and only the new session moves through.
@@ -89,10 +89,10 @@ $WORKSPACE_DIR/
 └── scripts/
     ├── _lib.sh                  ← shared helpers (logging, duration formatting, names parsing, name-variant rewriter); sources the .env file
     ├── pipeline/                ← the four core stages — one stage per script, run in order by ../run.sh
-    │   ├── extract_audio.sh        ← Stage 1: mp4 → wav
-    │   ├── transcribe_audio.sh     ← Stage 2: wav → srt + json (whisper.cpp)
-    │   ├── clean_transcript.sh     ← Stage 3: srt/json → txt (with [?] markers on low-confidence tokens)
-    │   └── summarize_session.sh    ← Stage 4: txt → md (Ollama, with name-variant post-pass)
+    │   ├── 1_extract_audio.sh        ← Stage 1: mp4 → wav
+    │   ├── 2_transcribe_audio.sh     ← Stage 2: wav → srt + json (whisper.cpp)
+    │   ├── 3_clean_transcript.sh     ← Stage 3: srt/json → txt (with [?] markers on low-confidence tokens)
+    │   └── 4_summarize_session.sh    ← Stage 4: txt → md (Ollama, with name-variant post-pass)
     └── utils/                   ← optional helpers — never invoked by ../run.sh
         ├── setup_check.sh          ← validate machine setup: tools, paths, Ollama service, model files, glossary
         ├── status.sh               ← per-session pipeline state table (which sessions are done, partial, or pending)
@@ -108,24 +108,24 @@ $WORKSPACE_DIR/
 
 `config/names.txt` holds canonical spellings of campaign proper nouns (PCs, NPCs, locations, etc.). Both Stage 2 and Stage 4 use it to keep names consistent across runs:
 
-- **`pipeline/transcribe_audio.sh`** passes the glossary to whisper.cpp via `--prompt` (with `--carry-initial-prompt` so the bias persists across all 30-second decode chunks). Whisper is much more likely to produce, e.g., *Aelthorin Brydhwell* (canonical) instead of *Althoran Bridewell* (a plausible-English mistranscription) when the canonical spelling is in the prompt.
-- **`pipeline/summarize_session.sh`** prepends the names list to the LLM's user message with a directive to normalize any variant spellings it still encounters. This catches things whisper got wrong despite the prompt bias.
+- **`pipeline/2_transcribe_audio.sh`** passes the glossary to whisper.cpp via `--prompt` (with `--carry-initial-prompt` so the bias persists across all 30-second decode chunks). Whisper is much more likely to produce, e.g., *Aelthorin Brydhwell* (canonical) instead of *Althoran Bridewell* (a plausible-English mistranscription) when the canonical spelling is in the prompt.
+- **`pipeline/4_summarize_session.sh`** prepends the names list to the LLM's user message with a directive to normalize any variant spellings it still encounters. This catches things whisper got wrong despite the prompt bias.
 
 **File format:** one name per line. Blank lines and `#`-comment lines are ignored. Add freely as new characters and locations enter play — a fuller glossary is strictly better.
 
-**Override path:** `NAMES_FILE=/path/to/other.txt ./pipeline/transcribe_audio.sh` (e.g., a per-group glossary).
+**Override path:** `NAMES_FILE=/path/to/other.txt ./pipeline/2_transcribe_audio.sh` (e.g., a per-group glossary).
 **Disable entirely:** `NAMES_FILE=/dev/null ./pipeline/...`
 
 ### Variant -> canonical post-pass
 
-`config/name_variants.txt` is a deterministic backstop applied by `pipeline/summarize_session.sh` after the LLM returns. Even with the glossary in the user message, the model sometimes echoes transcript variants verbatim — particularly when a wrong form is also a real English word (e.g. `Phoenix` when the canonical is `Phaenix`) and the model has a strong prior on the common-English spelling. The post-pass rewrites known mistranscriptions to their canonical form via word-boundary substitution.
+`config/name_variants.txt` is a deterministic backstop applied by `pipeline/4_summarize_session.sh` after the LLM returns. Even with the glossary in the user message, the model sometimes echoes transcript variants verbatim — particularly when a wrong form is also a real English word (e.g. `Phoenix` when the canonical is `Phaenix`) and the model has a strong prior on the common-English spelling. The post-pass rewrites known mistranscriptions to their canonical form via word-boundary substitution.
 
 **File format:** one rule per line, `<variant> -> <canonical>`. Matches are whole-word and case-insensitive by default. Prefix a variant with `!` to require a capitalized initial letter — use this for variants that double as common English words so ordinary prose isn't rewritten (e.g., `!Phoenix -> Phaenix` rewrites the name "Phoenix" but leaves the mythological-creature word "phoenix" alone). Lines starting with `#` and blank lines are ignored.
 
 Add new rules as new mistranscriptions appear in summaries.
 
-**Override path:** `VARIANTS_FILE=/path/to/other.txt ./pipeline/summarize_session.sh`
-**Disable entirely:** `VARIANTS_FILE=/dev/null ./pipeline/summarize_session.sh`
+**Override path:** `VARIANTS_FILE=/path/to/other.txt ./pipeline/4_summarize_session.sh`
+**Disable entirely:** `VARIANTS_FILE=/dev/null ./pipeline/4_summarize_session.sh`
 
 ## One-time setup (new machine)
 
@@ -206,14 +206,14 @@ $EDITOR "$WORKSPACE_DIR/config/name_variants.txt"
 
 The pipeline also works if your source is already an audio file rather than an OBS-captured `.mp4` — useful for podcast-style recordings, Zoom/Discord exports, or any recorder that doesn't produce video.
 
-Drop the audio file directly into `$WORKSPACE_DIR/audio/` (any of `.wav`, `.m4a`, `.mp3`, `.flac`, `.ogg`, `.aac`). Stage 1 (`pipeline/extract_audio.sh`) finds no `.mp4` in `recordings/` and exits cleanly as a no-op. Stage 2's whisper-cli accepts any of those formats directly, so the rest of the pipeline runs unchanged. `run.sh` is the same entry point for both cases.
+Drop the audio file directly into `$WORKSPACE_DIR/audio/` (any of `.wav`, `.m4a`, `.mp3`, `.flac`, `.ogg`, `.aac`). Stage 1 (`pipeline/1_extract_audio.sh`) finds no `.mp4` in `recordings/` and exits cleanly as a no-op. Stage 2's whisper-cli accepts any of those formats directly, so the rest of the pipeline runs unchanged. `run.sh` is the same entry point for both cases.
 
 If you prefer to skip Stage 1 entirely, run the remaining stages individually:
 
 ```bash
-"$WORKSPACE_DIR/scripts/pipeline/transcribe_audio.sh" && \
-  "$WORKSPACE_DIR/scripts/pipeline/clean_transcript.sh" && \
-  "$WORKSPACE_DIR/scripts/pipeline/summarize_session.sh"
+"$WORKSPACE_DIR/scripts/pipeline/2_transcribe_audio.sh" && \
+  "$WORKSPACE_DIR/scripts/pipeline/3_clean_transcript.sh" && \
+  "$WORKSPACE_DIR/scripts/pipeline/4_summarize_session.sh"
 ```
 
 The session filename used throughout downstream artifacts (`<session-stem>.srt`, `--<model>.md`, etc.) is derived from the audio file's basename. Pick a stable, unique stem — the maintainer's pattern is `YYYY-MM-DD_HH-MM-SS`, but any naming convention works as long as it's consistent.
@@ -266,7 +266,7 @@ NUM_CTX=32768
 
 ---
 
-## Stage 1 — `pipeline/extract_audio.sh`
+## Stage 1 — `pipeline/1_extract_audio.sh`
 
 Reads `recordings/*.mp4`, writes `audio/*.wav`. The source mp4 is opened read-only; only the destination wav is written.
 
@@ -285,7 +285,7 @@ Reads `recordings/*.mp4`, writes `audio/*.wav`. The source mp4 is opened read-on
 
 ---
 
-## Stage 2 — `pipeline/transcribe_audio.sh`
+## Stage 2 — `pipeline/2_transcribe_audio.sh`
 
 Reads `audio/*.wav`, writes `transcripts/*.srt` (timestamped subtitle file) and `transcripts/*.json` (per-token output including a confidence value `p` per token) via whisper.cpp. Runs on Apple Silicon Metal automatically. The `.json` is consumed by Stage 3 to mark low-confidence tokens; the `.srt` remains the human-readable timestamp reference.
 
@@ -307,7 +307,7 @@ Whisper.cpp models are downloaded from <https://huggingface.co/ggerganov/whisper
 
 ---
 
-## Stage 3 — `pipeline/clean_transcript.sh`
+## Stage 3 — `pipeline/3_clean_transcript.sh`
 
 Reads `transcripts/*.srt` (and `transcripts/*.json` if present), writes `transcripts/*.txt`. Bash + awk + jq; no external deps beyond what's already required.
 
@@ -325,7 +325,7 @@ Reads `transcripts/*.srt` (and `transcripts/*.json` if present), writes `transcr
 
 ---
 
-## Stage 4 — `pipeline/summarize_session.sh`
+## Stage 4 — `pipeline/4_summarize_session.sh`
 
 Reads `transcripts/*.txt`, writes `summaries/<session>--<model>.md` via a local LLM served by Ollama. The output filename includes the sanitized model tag (e.g. `2026-04-21_19-51-46--qwen2.5-32b-instruct-q4_K_M.md`) so multiple models can summarize the same session without conflict — useful for A/B testing models against each other.
 
@@ -334,8 +334,8 @@ The script bakes in a TTRPG-tuned system prompt that produces a structured outli
 **A/B testing models:** override `MODEL` per run; each model produces its own file alongside the others.
 
 ```bash
-./pipeline/summarize_session.sh                                              # default model
-MODEL=llama3.3:70b-instruct-q4_K_M ./pipeline/summarize_session.sh           # second pass
+./pipeline/4_summarize_session.sh                                              # default model
+MODEL=llama3.3:70b-instruct-q4_K_M ./pipeline/4_summarize_session.sh           # second pass
 ```
 
 **Tunable env vars**
@@ -409,7 +409,7 @@ Then `./run.sh` (or invoke each `scripts/pipeline/*.sh` stage individually) and 
 
 ## Troubleshooting
 
-**Repetition loops in transcripts** ("the same line repeated 6 times"). The transcriber already passes `--suppress-nst` and aggressive entropy/temperature settings. Stage 3's dedupe catches most of what gets through. If you still see them, `pipeline/clean_transcript.sh` with `DEDUPE_WINDOW=16` will catch longer cycles.
+**Repetition loops in transcripts** ("the same line repeated 6 times"). The transcriber already passes `--suppress-nst` and aggressive entropy/temperature settings. Stage 3's dedupe catches most of what gets through. If you still see them, `pipeline/3_clean_transcript.sh` with `DEDUPE_WINDOW=16` will catch longer cycles.
 
 **Trailing dead air not getting trimmed.** Bump `SILENCE_THRESHOLD` toward zero (`-35dB`, then `-30dB`). Don't go louder than `-30dB` — quiet speech starts getting cut.
 

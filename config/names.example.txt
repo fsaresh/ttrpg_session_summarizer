@@ -5,10 +5,10 @@
 # names.txt itself is gitignored — it stays local to your machine.
 #
 # How this file is used:
-#   - pipeline/transcribe_audio.sh — passed to whisper.cpp via --prompt to bias
+#   - pipeline/2_transcribe_audio.sh — passed to whisper.cpp via --prompt to bias
 #     transcription toward these spellings (e.g. canonical fantasy spellings
 #     instead of plausible-English mistranscriptions).
-#   - pipeline/summarize_session.sh — injected into the LLM's user message so it
+#   - pipeline/4_summarize_session.sh — injected into the LLM's user message so it
 #     normalizes any variant spellings the transcript still contains.
 #
 # Format:
@@ -21,8 +21,8 @@
 # Tips:
 #   - Add names freely as new characters / locations appear. A fuller glossary
 #     is strictly better — whisper does meaningfully better on names it has seen.
-#   - Override path with: NAMES_FILE=/path/to/other.txt ./pipeline/transcribe_audio.sh
-#   - Disable name injection entirely: NAMES_FILE=/dev/null ./pipeline/transcribe_audio.sh
+#   - Override path with: NAMES_FILE=/path/to/other.txt ./pipeline/2_transcribe_audio.sh
+#   - Disable name injection entirely: NAMES_FILE=/dev/null ./pipeline/2_transcribe_audio.sh
 
 # === Player Characters ===
 Aelthorin
