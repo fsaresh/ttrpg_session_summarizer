@@ -8,47 +8,26 @@ TRANSCRIPTS_DIR="$WORKSPACE_DIR/transcripts"
 SUMMARIES_DIR="$WORKSPACE_DIR/summaries"
 
 # See README "Tier 3: summarize_session" for setup, model choice, and tuning.
+# Defaults below are the script-level fallback; they're overridden by
+# config/settings.conf (sourced from _lib.sh) and by env vars at run time.
 MODEL="${MODEL:-qwen2.5:32b-instruct-q4_K_M}"
 NUM_CTX="${NUM_CTX:-65536}"
-TEMPERATURE="${TEMPERATURE:-0.3}"
+SUMMARIZE_TEMPERATURE="${SUMMARIZE_TEMPERATURE:-0.3}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 NAMES_FILE="${NAMES_FILE:-$CONFIG_DIR/names.txt}"
 VARIANTS_FILE="${VARIANTS_FILE:-$CONFIG_DIR/name_variants.txt}"
 
-SYSTEM_PROMPT='You are a transcription analyst for a tabletop RPG campaign. You receive a cleaned plain-text transcript of a recently played game session. Your job is to extract a structured outline of what happened — NOT to write polished narrative prose. Your output is the input to a downstream pass that handles prose synthesis.
-
-Output format (markdown):
-
-## Session beats
-Chronological bullet list of major plot or scene moments. One bullet per scene or significant event. Be specific about who did what, where, and what changed as a result.
-
-## NPCs encountered
-For each NPC the party interacted with: name, apparent role or affiliation, and a short description of their interaction in this session.
-
-## Key decisions and outcomes
-What the party chose. What happened as a result of those choices. Include things they explicitly chose not to do if it came up.
-
-## Lore, clues, and worldbuilding
-Anything mentioned about the larger campaign world: prophecies, references to past events, hints, factional info. Quote prophecies or potentially-significant phrasings exactly.
-
-## Items, magic, abilities of note
-Items found, lost, used. Spells or abilities that mattered. Anything with mechanical significance worth tracking.
-
-## Character moments
-Personal moments for individual player characters: emotional beats, growth, drama, internal conflict, relationships. Note which character (use their proper name from the transcript).
-
-## Open threads
-What is unresolved, what the party might pursue next, what questions linger.
-
-## Notable quotes
-Up to five lines from the transcript worth preserving verbatim — funny lines, dramatic moments, in-character declarations. Mark each with [quote].
-
-Rules:
-- Proper nouns: the user message provides a glossary of canonical spellings for this campaign. For any name in that glossary, output the canonical spelling — even when the transcript spells it differently (homophones, missing letters, phonetic variants). For names not in the glossary, preserve them exactly as the transcript spells them. Do not anglicize, paraphrase, or invent alternative spellings.
-- Do not invent details or fill in gaps. If something is unclear, write "[unclear]".
-- Skip rules-discussion meta-talk and out-of-character chat unless directly relevant to in-fiction events.
-- Be comprehensive but compressed: this is an outline, not a novel.
-- Do not add narrative voice or atmospheric prose — that is a separate pass.'
+# System prompt is loaded from config/. Try the user's customized version
+# first, fall back to the shipped .example.txt.
+SUMMARY_PROMPT_FILE="${SUMMARY_PROMPT_FILE:-$CONFIG_DIR/summary_prompt.txt}"
+if [[ ! -f "$SUMMARY_PROMPT_FILE" ]]; then
+  SUMMARY_PROMPT_FILE="$CONFIG_DIR/summary_prompt.example.txt"
+fi
+if [[ ! -f "$SUMMARY_PROMPT_FILE" ]]; then
+  logerr "Error: no summary prompt found at $CONFIG_DIR/summary_prompt.{txt,example.txt}"
+  exit 1
+fi
+SYSTEM_PROMPT=$(<"$SUMMARY_PROMPT_FILE")
 
 if ! command -v jq >/dev/null 2>&1; then
   logerr "Error: jq not found. Install with: brew install jq"
@@ -138,7 +117,7 @@ for src in "${txt_files[@]}"; do
     --arg names_tail "$NAMES_TAIL" \
     --rawfile content "$src" \
     --argjson num_ctx "$NUM_CTX" \
-    --argjson temperature "$TEMPERATURE" \
+    --argjson temperature "$SUMMARIZE_TEMPERATURE" \
     '{
       model: $model,
       messages: [

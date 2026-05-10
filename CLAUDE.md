@@ -62,8 +62,12 @@ recordings/            raw .mp4 (never modified)
 audio/                 .wav (16 kHz mono PCM, ffmpeg output) — also accepts user-provided .wav/.m4a/.mp3/.flac/.ogg/.aac for audio-only mode
 transcripts/           .srt + .json + .txt side by side (whisper.cpp emits .srt+.json; cleaner emits .txt)
 summaries/             .md, model-tagged (Ollama). `--refined.md` suffix marks refiner output.
-config/                names.txt, names.example.txt, name_variants.txt, name_variants.example.txt
-                       (the .txt actuals are gitignored; .example.txt are tracked templates)
+config/                names.txt + names.example.txt, name_variants.txt + name_variants.example.txt,
+                       summary_prompt.txt + summary_prompt.example.txt,
+                       refine_prompt.txt + refine_prompt.example.txt,
+                       settings.conf + settings.example.conf
+                       (the .txt/.conf actuals are gitignored; .example.* are tracked templates;
+                        scripts fall back to .example.* when the actual is missing)
 scripts/               _lib.sh
 scripts/pipeline/      extract_audio.sh, transcribe_audio.sh, clean_transcript.sh, summarize_session.sh
 scripts/utils/         refine_summary.sh, audit_summaries.sh, lint_glossary.sh, clear_session.sh
@@ -93,6 +97,6 @@ When adding a new stage that benefits from name awareness, source it through the
 - New external dependencies (anything beyond what's already required: ffmpeg, whisper-cpp, ollama, jq, perl).
 - New directories or restructuring.
 - Changing the file-naming conventions in any output dir.
-- Changing the system prompt in `pipeline/summarize_session.sh` or `utils/refine_summary.sh` — those are tuned for the downstream Claude synthesis pass and shouldn't drift without intent.
+- Changing the prompt files at `config/summary_prompt.example.txt` or `config/refine_prompt.example.txt` — those are the shipped defaults tuned for the downstream Claude synthesis pass and shouldn't drift without intent. (Users override via the gitignored `summary_prompt.txt` / `refine_prompt.txt`; treat that as user-driven.)
 - Editing `names.txt` or `name_variants.txt` content. They are user-owned per-campaign data; pre-population at creation was a one-time bootstrap. Treat subsequent edits as user-driven (a deliberate exception: when the user explicitly tells you to add a name or rule in conversation, that's user-driven — go ahead).
 - Changing `WORKSPACE_DIR`'s default value in `_lib.sh` — that's the new-machine setup point. Pin it down in conversation before touching it.

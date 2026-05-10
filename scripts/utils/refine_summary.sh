@@ -10,31 +10,26 @@ source "$SCRIPT_DIR/../_lib.sh"
 TXT_DIR="$WORKSPACE_DIR/transcripts"
 MD_DIR="$WORKSPACE_DIR/summaries"
 
+# Defaults below are the script-level fallback; they're overridden by
+# config/settings.conf (sourced from _lib.sh) and by env vars at run time.
 MODEL="${MODEL:-qwen2.5:32b-instruct-q4_K_M}"
 NUM_CTX="${NUM_CTX:-65536}"
-TEMPERATURE="${TEMPERATURE:-0.2}"
+REFINE_TEMPERATURE="${REFINE_TEMPERATURE:-0.2}"
 OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 NAMES_FILE="${NAMES_FILE:-$CONFIG_DIR/names.txt}"
 VARIANTS_FILE="${VARIANTS_FILE:-$CONFIG_DIR/name_variants.txt}"
 
-REFINE_SYSTEM_PROMPT='You are a transcription analyst reviewing a draft session outline for a tabletop RPG campaign. You receive two inputs:
-1. A draft outline produced from the transcript by an automated first pass.
-2. The full cleaned transcript that the draft was built from.
-
-Your job is to produce an improved outline by identifying what the draft missed or underspecified and integrating those additions. The output is the input to a downstream prose-synthesis pass.
-
-How to work:
-- Compare the draft to the transcript, section by section.
-- Find scenes, NPCs, decisions, items, character moments, lore, open threads, and quotes that the draft omitted or treated too thinly.
-- Keep everything in the draft that the transcript supports; correct anything the transcript contradicts.
-- Output a single complete improved outline using the SAME markdown section headings as the draft (## Session beats, ## NPCs encountered, ## Key decisions and outcomes, ## Lore, clues, and worldbuilding, ## Items, magic, abilities of note, ## Character moments, ## Open threads, ## Notable quotes).
-
-Rules:
-- Proper nouns: the user message provides a glossary of canonical spellings. For any name in that glossary, output the canonical spelling — even when the transcript or draft spells it differently. For names not in the glossary, preserve them exactly as they appear. Do not anglicize or invent.
-- Do not invent details. If something is unclear, write "[unclear]". If a detail is in the draft but not in the transcript, drop it.
-- Skip rules-discussion meta-talk and out-of-character chat unless directly relevant to in-fiction events.
-- Be comprehensive but compressed: this is an outline, not a novel.
-- Output the improved outline only — no preamble, no commentary about what changed.'
+# System prompt is loaded from config/. Try the user's customized version
+# first, fall back to the shipped .example.txt.
+REFINE_PROMPT_FILE="${REFINE_PROMPT_FILE:-$CONFIG_DIR/refine_prompt.txt}"
+if [[ ! -f "$REFINE_PROMPT_FILE" ]]; then
+  REFINE_PROMPT_FILE="$CONFIG_DIR/refine_prompt.example.txt"
+fi
+if [[ ! -f "$REFINE_PROMPT_FILE" ]]; then
+  logerr "Error: no refine prompt found at $CONFIG_DIR/refine_prompt.{txt,example.txt}"
+  exit 1
+fi
+REFINE_SYSTEM_PROMPT=$(<"$REFINE_PROMPT_FILE")
 
 if ! command -v jq >/dev/null 2>&1; then
   logerr "Error: jq not found. Install with: brew install jq"
@@ -137,7 +132,7 @@ for draft in "${first_pass[@]}"; do
     --arg system "$REFINE_SYSTEM_PROMPT" \
     --arg user "$user_content" \
     --argjson num_ctx "$NUM_CTX" \
-    --argjson temperature "$TEMPERATURE" \
+    --argjson temperature "$REFINE_TEMPERATURE" \
     '{
       model: $model,
       messages: [

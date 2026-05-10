@@ -11,10 +11,18 @@
 # Default targets the original maintainer's setup; change here if forking.
 WORKSPACE_DIR="${WORKSPACE_DIR:-$HOME/Movies/OBS}"
 
-# Per-campaign data files (names.txt, name_variants.txt) live here. Override
-# only if you want to keep multiple campaigns side-by-side or stash config
-# elsewhere; default keeps it next to the data dirs.
+# Per-campaign data files (names.txt, name_variants.txt), externalised
+# system prompts (summary_prompt.txt, refine_prompt.txt), and pipeline
+# settings (settings.conf) all live here. Override only if you want to keep
+# multiple campaigns side-by-side or stash config elsewhere; default keeps
+# it next to the data dirs.
 CONFIG_DIR="${CONFIG_DIR:-$WORKSPACE_DIR/config}"
+
+# Source per-machine settings if present. settings.conf uses the
+# `: "${VAR:=default}"` pattern, so env vars set in the caller's shell
+# still win — settings.conf only fills in values not already set.
+SETTINGS_FILE="${SETTINGS_FILE:-$CONFIG_DIR/settings.conf}"
+[[ -f "$SETTINGS_FILE" ]] && source "$SETTINGS_FILE"
 
 # Wall-clock timestamp (HH:MM:SS).
 ts() { date +%H:%M:%S; }

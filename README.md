@@ -49,11 +49,17 @@ $WORKSPACE_DIR/
 ├── audio/                    ← extracted audio (.wav) — created by Stage 1, or populated yourself for audio-only runs
 ├── transcripts/              ← whisper output (.srt + .json) + cleaned plain text (.txt) — created by Stages 2-3
 ├── summaries/                ← Ollama-generated outlines (.md) — created by Stage 4
-├── config/                   ← per-campaign data files (canonical names + variant rules)
+├── config/                   ← per-campaign data files, system prompts, and pipeline settings
 │   ├── names.example.txt        ← shipped template for names.txt
 │   ├── name_variants.example.txt ← shipped template for name_variants.txt
-│   ├── names.txt                ← campaign-specific canonical proper nouns (gitignored; copy from .example.txt)
-│   └── name_variants.txt        ← campaign-specific variant→canonical rewrites (gitignored; copy from .example.txt)
+│   ├── summary_prompt.example.txt ← shipped Stage-4 system prompt (TTRPG-tuned)
+│   ├── refine_prompt.example.txt  ← shipped refiner system prompt
+│   ├── settings.example.conf    ← shipped pipeline-settings template (model paths, thresholds, etc.)
+│   ├── names.txt                ← canonical proper nouns (gitignored; copy from .example.txt to customize)
+│   ├── name_variants.txt        ← variant→canonical rewrites (gitignored; copy from .example.txt to customize)
+│   ├── summary_prompt.txt       ← (gitignored, optional override; scripts fall back to .example.txt if absent)
+│   ├── refine_prompt.txt        ← (gitignored, optional override; scripts fall back to .example.txt if absent)
+│   └── settings.conf            ← (gitignored, optional; sourced by _lib.sh if present)
 └── scripts/
     ├── _lib.sh                  ← shared helpers (logging, duration formatting, names parsing, name-variant rewriter, WORKSPACE_DIR + CONFIG_DIR defaults)
     ├── pipeline/                ← the four core stages — one stage per script, run in order by ../run.sh
@@ -117,10 +123,21 @@ curl -L -o ~/source/external/whisper_models/ggml-large-v3.bin \
 ollama pull qwen2.5:32b-instruct-q4_K_M
 
 # 6. Bootstrap the per-campaign data files from the shipped templates.
-#    Both .example.txt files are tracked in git; the actual names.txt and
-#    name_variants.txt are gitignored so each user's campaign data stays local.
+#    .example.txt / .example.conf files are tracked in git; the actual
+#    customizable copies are gitignored so each user's data stays local.
+#
+#    Required (otherwise the pipeline runs with an empty glossary):
 cp "$WORKSPACE_DIR/config/names.example.txt"         "$WORKSPACE_DIR/config/names.txt"
 cp "$WORKSPACE_DIR/config/name_variants.example.txt" "$WORKSPACE_DIR/config/name_variants.txt"
+
+#    Optional — only copy these if you want to customize:
+#      summary_prompt.txt   override the Stage-4 system prompt (e.g. for non-TTRPG)
+#      refine_prompt.txt    override the refine-pass system prompt
+#      settings.conf        override pipeline defaults (model paths, thresholds)
+#    If the .txt or .conf isn't present, scripts use the shipped .example.* file.
+# cp "$WORKSPACE_DIR/config/summary_prompt.example.txt" "$WORKSPACE_DIR/config/summary_prompt.txt"
+# cp "$WORKSPACE_DIR/config/refine_prompt.example.txt"  "$WORKSPACE_DIR/config/refine_prompt.txt"
+# cp "$WORKSPACE_DIR/config/settings.example.conf"      "$WORKSPACE_DIR/config/settings.conf"
 
 # 7. Edit config/names.txt and config/name_variants.txt — replace the
 #    placeholder entries with your campaign's real PCs/NPCs/locations and
@@ -172,7 +189,7 @@ The session filename used throughout downstream artifacts (`<session-stem>.srt`,
 
 Other settings tuned to the maintainer's setup that you may want to revisit:
 - `MODEL` and `MODEL_PATH` defaults in `pipeline/transcribe_audio.sh` and `pipeline/summarize_session.sh` — change if you use different whisper / Ollama models.
-- `scripts/pipeline/summarize_session.sh` system prompt — currently tuned for TTRPG session outlines and a downstream Claude prose-synthesis pass. Edit the `SYSTEM_PROMPT` shell variable in that script if your game system or output structure needs something different (e.g., different section headings, non-TTRPG use cases).
+- `config/summary_prompt.txt` and `config/refine_prompt.txt` — system prompts for Stage 4 and the refine pass, currently tuned for TTRPG session outlines and a downstream Claude prose-synthesis pass. Copy from the shipped `.example.txt` and edit if your game system or output structure needs something different (e.g., different section headings, non-TTRPG use cases). Scripts fall back to the `.example.txt` if you haven't created the override.
 
 ## Hardware sizing
 
