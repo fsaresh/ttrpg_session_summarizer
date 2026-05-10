@@ -80,7 +80,7 @@ for src in "${audio_files[@]}"; do
       --output-srt \
       --output-json-full \
       --output-file "$TRANSCRIPT_DIR/$stem" \
-      --language en \
+      --language "${LANGUAGE:-en}" \
       --word-thold "$WORD_THRESHOLD" \
       --suppress-nst \
       --entropy-thold "$ENTROPY_THRESHOLD" \

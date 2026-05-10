@@ -20,8 +20,8 @@ First, read README.md and CLAUDE.md so you understand the pipeline. Then walk me
 7. Ask if I've noticed any specific name mistranscriptions yet (whisper hearing "Perry" instead of "Peri", etc.); if so, add them to name_variants.txt. If not, leave the example rules in place as illustration.
 8. Show me config/summary_prompt.example.txt and ask whether I want to customize it. Reasons to customize: different game system with different conventions, non-TTRPG use case (interview transcripts, podcast notes, etc.), different output section structure. If I want changes, copy to config/summary_prompt.txt and edit it per my answers. Then do the same for config/refine_prompt.example.txt.
 9. Show me the .env.example file at the repo root and ask whether I want to copy it to .env and customize. .env holds model paths, model tags, context size, and decoder thresholds; values there override anything I `export`-ed in my shell. Most people skip this — only relevant if I'm not using the default models or if I want to tune the advanced section.
-10. Run scripts/utils/lint_glossary.sh to validate my data files.
-11. Tell me what to do for my first session: where to drop the .mp4 (or audio file), then ./run.sh.
+10. Run scripts/utils/setup_check.sh — that validates dependencies, paths, the Ollama service, the model file, and the glossary in one shot.
+11. Tell me what to do for my first session: where to drop the .mp4 (or audio file), then ./run.sh. Mention that scripts/utils/status.sh shows which sessions have been processed.
 
 Don't dump everything at once. One topic per question, and pause for my response. If a step needs a long-running command (model downloads, ollama pull), tell me the time estimate up front.
 ```
@@ -94,6 +94,8 @@ $WORKSPACE_DIR/
     │   ├── clean_transcript.sh     ← Stage 3: srt/json → txt (with [?] markers on low-confidence tokens)
     │   └── summarize_session.sh    ← Stage 4: txt → md (Ollama, with name-variant post-pass)
     └── utils/                   ← optional helpers — never invoked by ../run.sh
+        ├── setup_check.sh          ← validate machine setup: tools, paths, Ollama service, model files, glossary
+        ├── status.sh               ← per-session pipeline state table (which sessions are done, partial, or pending)
         ├── refine_summary.sh       ← optional second-pass LLM review: transcript + draft summary → improved outline (writes <session>--<model>--refined.md)
         ├── audit_summaries.sh      ← report canonical-name and leaked-variant counts per summary; surfaces gaps in name_variants.txt
         ├── lint_glossary.sh        ← validate names.txt and name_variants.txt for duplicates, malformed rules, unknown canonicals
@@ -189,8 +191,9 @@ cp "$WORKSPACE_DIR/config/name_variants.example.txt" "$WORKSPACE_DIR/config/name
 $EDITOR "$WORKSPACE_DIR/config/names.txt"
 $EDITOR "$WORKSPACE_DIR/config/name_variants.txt"
 
-# 8. (optional) Validate the data files.
-"$WORKSPACE_DIR/scripts/utils/lint_glossary.sh"
+# 8. Run the full setup check: dependencies installed, paths resolved,
+#    Ollama up, model pulled, data files valid.
+"$WORKSPACE_DIR/scripts/utils/setup_check.sh"
 
 # 9. Drop your first source file in and run the pipeline:
 #      OBS / video capture path: place the .mp4 in $WORKSPACE_DIR/recordings/
@@ -295,6 +298,7 @@ Reads `audio/*.wav`, writes `transcripts/*.srt` (timestamped subtitle file) and 
 | `ENTROPY_THRESHOLD` | `3.0` | Threshold above which a decode is declared "failed" and triggers temperature fallback. Repetition loops are low-entropy, so a higher threshold catches more loops. Default whisper.cpp value is `2.40`. |
 | `TEMPERATURE_INC` | `0.5` | Temperature increment on each fallback retry. Bigger jump = better chance of escaping a loop on the first retry. Default whisper.cpp value is `0.2`. |
 | `THREADS` | `8` | CPU thread count. Metal handles the heavy work on Apple Silicon; this mostly affects pre/post stages. |
+| `LANGUAGE` | `en` | Two-letter ISO 639-1 code passed to whisper-cli (`--language`). Set to `auto` for auto-detection (occasionally misfires on opening music/silence). |
 | `NAMES_FILE` | `config/names.txt` | Glossary of canonical proper nouns; passed to whisper.cpp via `--prompt`. See "Names glossary" above. |
 
 The script also passes `--suppress-nst` (suppress non-speech tokens) unconditionally — this kills off most repetition-loop hallucinations triggered by `[BLANK_AUDIO]` / `[MUSIC]` token attractors, with no downside for session-note synthesis.
