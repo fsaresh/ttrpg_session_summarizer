@@ -15,7 +15,7 @@ First, read README.md and CLAUDE.md so you understand the pipeline. Then walk me
 2. Install or verify deps: ffmpeg, whisper-cpp, ollama, jq, perl. For anything missing, give me the exact install command for my OS.
 3. WORKSPACE_DIR location — default is $HOME/Movies/OBS. Confirm or change.
 4. mkdir -p the directory structure under $WORKSPACE_DIR (recordings/, audio/, transcripts/, summaries/, config/, scripts/).
-5. Download the whisper.cpp model and `ollama pull` the LLM that matches my RAM tier per the README's "Hardware sizing" table. Don't assume defaults — ask first.
+5. Ask where I want whisper.cpp models stored (default: $HOME/source/external/whisper_models) and where Ollama models should live (default: ~/.ollama/models). For non-default Ollama, remind me to export OLLAMA_MODELS in my shell rc *before* starting `ollama serve`. Then download the whisper.cpp model and `ollama pull` the LLM that matches my RAM tier per the README's "Hardware sizing" table. Don't assume defaults — ask first.
 6. Copy the templates: config/names.example.txt → names.txt and config/name_variants.example.txt → name_variants.txt. Then ask me for player characters, major NPCs, important locations, and deities/factions/recurring proper nouns. Replace the placeholder entries with what I tell you, under appropriate `# === Section ===` headers.
 7. Ask if I've noticed any specific name mistranscriptions yet (whisper hearing "Perry" instead of "Peri", etc.); if so, add them to name_variants.txt. If not, leave the example rules in place as illustration.
 8. Show me config/summary_prompt.example.txt and ask whether I want to customize it. Reasons to customize: different game system with different conventions, non-TTRPG use case (interview transcripts, podcast notes, etc.), different output section structure. If I want changes, copy to config/summary_prompt.txt and edit it per my answers. Then do the same for config/refine_prompt.example.txt.
@@ -141,11 +141,20 @@ mkdir -p "$WORKSPACE_DIR"/{recordings,audio,transcripts,summaries,config,scripts
 # Then place this repo's scripts/ and config/ contents in $WORKSPACE_DIR/.
 
 # 4. Whisper.cpp model (~3 GB; large-v3 for best fantasy-name accuracy).
-mkdir -p ~/source/external/whisper_models
-curl -L -o ~/source/external/whisper_models/ggml-large-v3.bin \
+#    The default lives at $HOME/source/external/whisper_models/. To relocate
+#    (e.g. external drive), set WHISPER_MODELS_DIR in your shell rc and use
+#    the same path in `mkdir -p` and `curl -o` below; also set it in
+#    config/settings.conf so the pipeline finds the file.
+WHISPER_MODELS_DIR="${WHISPER_MODELS_DIR:-$HOME/source/external/whisper_models}"
+mkdir -p "$WHISPER_MODELS_DIR"
+curl -L -o "$WHISPER_MODELS_DIR/ggml-large-v3.bin" \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
 
 # 5. Ollama summarization model (~20 GB; pulls once, takes a while).
+#    Ollama stores models at ~/.ollama/models by default; to relocate (disk
+#    constraints, external drive), `export OLLAMA_MODELS=/path/to/dir` in
+#    your shell rc *before* starting `ollama serve`, then `brew services
+#    restart ollama`. The daemon reads it once at boot.
 ollama pull qwen2.5:32b-instruct-q4_K_M
 
 # 6. Bootstrap the per-campaign data files from the shipped templates.
@@ -169,8 +178,8 @@ cp "$WORKSPACE_DIR/config/name_variants.example.txt" "$WORKSPACE_DIR/config/name
 #    placeholder entries with your campaign's real PCs/NPCs/locations and
 #    any mistranscriptions you've observed. See "Customizing for your
 #    campaign" below for the workflow.
-$EDITOR "$WORKSPACE_DIR/scripts/names.txt"
-$EDITOR "$WORKSPACE_DIR/scripts/name_variants.txt"
+$EDITOR "$WORKSPACE_DIR/config/names.txt"
+$EDITOR "$WORKSPACE_DIR/config/name_variants.txt"
 
 # 8. (optional) Validate the data files.
 "$WORKSPACE_DIR/scripts/utils/lint_glossary.sh"
@@ -214,7 +223,7 @@ The session filename used throughout downstream artifacts (`<session-stem>.srt`,
 - Run `scripts/utils/lint_glossary.sh` after edits to catch typos, duplicates, and rules pointing to canonicals that aren't in `names.txt`.
 
 Other settings tuned to the maintainer's setup that you may want to revisit:
-- `MODEL` and `MODEL_PATH` defaults in `pipeline/transcribe_audio.sh` and `pipeline/summarize_session.sh` — change if you use different whisper / Ollama models.
+- `config/settings.conf` — model paths, Ollama model tag, context size, and decoder thresholds. Copy from `settings.example.conf` and edit. See "Hardware sizing" for what to choose per RAM tier.
 - `config/summary_prompt.txt` and `config/refine_prompt.txt` — system prompts for Stage 4 and the refine pass, currently tuned for TTRPG session outlines and a downstream Claude prose-synthesis pass. Copy from the shipped `.example.txt` and edit if your game system or output structure needs something different (e.g., different section headings, non-TTRPG use cases). Scripts fall back to the `.example.txt` if you haven't created the override.
 
 ## Hardware sizing
@@ -242,14 +251,6 @@ NUM_CTX=32768 \
 **No GPU at all** for Ollama: small models (3–7B) run at 5–15 tokens/sec on a modern CPU and summarize a 3-hour session in a few minutes. Don't run `qwen2.5:32b` CPU-only — it'll take tens of minutes per summary.
 
 **Low disk**: whisper models are 1.5–3 GB each, Ollama models 2–40 GB each — you only need one of each. Audio files are ~115 MB/hour; transcripts and summaries are tiny.
-
-To verify everything's wired up:
-
-```bash
-ffmpeg -version | head -1
-whisper-cli --help >/dev/null && echo whisper ok
-curl -s localhost:11434/api/tags | jq '.models[].name'
-```
 
 ---
 
@@ -289,13 +290,7 @@ Reads `audio/*.wav`, writes `transcripts/*.srt` (timestamped subtitle file) and 
 
 The script also passes `--suppress-nst` (suppress non-speech tokens) unconditionally — this kills off most repetition-loop hallucinations triggered by `[BLANK_AUDIO]` / `[MUSIC]` token attractors, with no downside for session-note synthesis.
 
-**Model choices** (download from https://huggingface.co/ggerganov/whisper.cpp)
-
-| File | Size | Notes |
-|---|---|---|
-| `ggml-large-v3.bin` | ~3 GB | **Default.** Best accuracy on fantasy names. |
-| `ggml-large-v3-turbo-q5_0.bin` | ~1.5 GB | ~5× faster, near-large-v3 quality. Good if speed matters. |
-| `ggml-medium.en.bin` | ~1.5 GB | English-only, faster, weaker on names. |
+Whisper.cpp models are downloaded from <https://huggingface.co/ggerganov/whisper.cpp>. See [Hardware sizing](#hardware-sizing) for which model fits your RAM.
 
 ---
 
@@ -336,47 +331,28 @@ MODEL=llama3.3:70b-instruct-q4_K_M ./pipeline/summarize_session.sh           # s
 |---|---|---|
 | `MODEL` | `qwen2.5:32b-instruct-q4_K_M` | Ollama model tag. See "Model choices" below. |
 | `NUM_CTX` | `65536` | Total context window (input + output). Ollama's default 2048 would truncate any real session. Bump if you ever record sessions that don't fit. |
-| `TEMPERATURE` | `0.3` | Lower = more faithful extraction. Bump to 0.5 only if outlines feel mechanical. |
+| `SUMMARIZE_TEMPERATURE` | `0.3` | Lower = more faithful extraction. Bump to 0.5 only if outlines feel mechanical. |
 | `OLLAMA_URL` | `http://localhost:11434` | Where Ollama is listening. Change if you remote-host it. |
 | `NAMES_FILE` | `config/names.txt` | Glossary of canonical proper nouns; injected into the LLM's user message so it normalizes variant spellings. See "Names glossary" above. |
 | `VARIANTS_FILE` | `config/name_variants.txt` | Deterministic variant→canonical rewrite rules applied to the LLM's output as a post-pass. See "Variant → canonical post-pass" above. |
 
-**Model choices** (after `ollama pull <name>`)
-
-| Tag | Size | Notes |
-|---|---|---|
-| `qwen2.5:32b-instruct-q4_K_M` | ~20 GB | **Default.** Strong structured extraction, 128K context. |
-| `qwen2.5:14b-instruct-q4_K_M` | ~9 GB | Faster, slightly weaker on names. Recommended for 24 GB machines. |
-| `qwen2.5:7b-instruct-q4_K_M` | ~5 GB | Faster still; usable summary quality with a populated `name_variants.txt`. Recommended for 16 GB machines. |
-| `llama3.3:70b-instruct-q4_K_M` | ~40 GB | Highest raw quality, RAM-tight on 48 GB unified memory. |
-| `llama3.2:3b-instruct-q4_K_M` | ~2 GB | Fast, quality drops noticeably on fantasy names. Last-resort tier for 8 GB machines. |
-
-**Switching models per run**: `MODEL=qwen2.5:14b-instruct-q4_K_M ./pipeline/summarize_session.sh`
+Ollama models are pulled with `ollama pull <tag>`. See [Hardware sizing](#hardware-sizing) for the recommended tag per RAM tier.
 
 ---
 
-## Tier 3 — Claude synthesis
+## Stage 5 — Claude synthesis
 
-Drop a session's `summaries/<session>.md` into a Claude conversation with a directive like:
+Drop a session's `summaries/<session>--<model>.md` into a Claude conversation with a directive like:
 
 > *Synthesize this into session notes for my campaign. Match the tone/voice of existing arc summaries in this conversation. Respect the player-known vs. GM-only information split.*
 
-Claude weaves the structured outline into in-voice campaign prose, applies the campaign's themes, and keeps GM-only material out of the player-facing recap. This is the only stage that costs API tokens — Tiers 1 and 2 reduce a 50–100K-token raw transcript to a 1–3K-token outline before the synthesis pass.
+Claude weaves the structured outline into in-voice campaign prose, applies the campaign's themes, and keeps GM-only material out of the player-facing recap. This is the only stage that costs API tokens — Stages 1–4 reduce a 50–100K-token raw transcript to a 1–3K-token outline before the synthesis pass.
 
 ---
 
 ## Maintenance
 
-| Task | Command |
-|---|---|
-| Update Homebrew tools | `brew upgrade ffmpeg whisper-cpp ollama jq` |
-| Restart Ollama after upgrade | `brew services restart ollama` |
-| List installed Ollama models | `ollama list` |
-| Refresh / re-pull a model | `ollama pull qwen2.5:32b-instruct-q4_K_M` |
-| Remove a model (free disk) | `ollama rm <model>` |
-| Update whisper.cpp model | re-download with `curl -L -o ...` |
-
-Ollama models live under `~/.ollama/models`; whisper models live under `~/source/external/whisper_models/`.
+Ollama models live under `~/.ollama/models` (override with `OLLAMA_MODELS` exported before `ollama serve` boots); whisper models under `$WHISPER_MODELS_DIR` (default `~/source/external/whisper_models/`, set in `config/settings.conf`). Use `ollama list` / `ollama rm <tag>` to inspect or free disk; re-pull models with `ollama pull <tag>` and re-download whisper bins with `curl -L -o`. Restart Ollama after upgrades with `brew services restart ollama`.
 
 ---
 

@@ -43,7 +43,7 @@ Follow the existing pattern:
 1. Source `_lib.sh` at the top — this also brings in `WORKSPACE_DIR`.
 2. Define directory variables with descriptive names (e.g. `RECORDINGS_DIR`, `AUDIO_DIR`, `TRANSCRIPTS_DIR`, `SUMMARIES_DIR`) as `"$WORKSPACE_DIR/<lowercase-subdir>"` (never as a hard-coded literal). Reference shared data files via `$CONFIG_DIR/names.txt` and `$CONFIG_DIR/name_variants.txt`.
 3. Expose tunables as `${VAR:-default}` env-var-overridable constants near the top.
-4. Pre-flight: check required tools, check input dir exists, `mkdir -p "$DST_DIR"`.
+4. Pre-flight: check required tools, check input dir exists, `mkdir -p` the output dir.
 5. Glob input files (`shopt -s nullglob` … `shopt -u nullglob`). Under `set -u` on bash 3.2 (macOS default), do not blindly expand `"${arr[@]}"` for an array that may be empty after a no-match glob — guard with `[[ ${#arr[@]} -gt 0 ]]` or only reference the array inside a body that's known non-empty.
 6. Track `script_start=$(date +%s)`. Per-file: `file_start=$(date +%s)` and append `($(fmt_duration ...))` to the success line.
 7. Loop with skip-if-exists check before any expensive work.
@@ -79,18 +79,17 @@ Don't add new directories without checking with the user — they previously rej
 
 ## Names glossary
 
-`config/names.txt` is canonical proper-noun config used at two stages:
+`config/names.txt` (canonical names, used by Stages 2 + 4) and `config/name_variants.txt` (variant→canonical rewrites, post-pass after Stage 4) share the same template/actual + helper-function pattern:
 
-- `pipeline/transcribe_audio.sh` reads it and passes a comma-joined glossary to `whisper-cli --prompt` with `--carry-initial-prompt` so the bias persists across all decode chunks.
-- `pipeline/summarize_session.sh` reads it and prepends the list to the LLM's user message with a directive to normalize variant spellings.
+- Parsed in `_lib.sh` via `read_names()` (blanks + `#`-comments stripped, whitespace trimmed) and applied in `apply_name_variants()` (perl-based whole-word substitution with `!`-prefix opting into capitalized-only for English-word collisions like `!Phoenix -> Phaenix`).
+- Overridable via `NAMES_FILE` / `VARIANTS_FILE`; missing files are graceful (empty glossary, passthrough rewrite) — don't add fail-on-missing checks.
+- When adding a new stage that benefits from name awareness, reuse `read_names "$NAMES_FILE"` rather than introducing a parallel parser.
 
-Both go through `read_names()` in `_lib.sh` (skips blanks and `#`-comment lines, trims whitespace). The file path is overridable via `NAMES_FILE`. If the file is missing or empty, both stages run unaffected with empty glossary args — don't add fail-on-missing checks.
+## Per-campaign / per-machine config files
 
-When adding a new stage that benefits from name awareness, source it through the same `read_names "$NAMES_FILE"` path. Don't introduce a second naming convention or duplicate parser.
+Everything under `config/` follows the same template + actual pattern: `<name>.example.{txt,conf}` is tracked in git (the shipped default), `<name>.{txt,conf}` is gitignored (the user's customization). Five pairs in total: `names`, `name_variants`, `summary_prompt`, `refine_prompt`, `settings`. The first two are pure data; the prompt files are loaded by the summarizer/refiner with fallback to `.example.txt` when the actual is absent; `settings.conf` is sourced from `_lib.sh` if present.
 
-`config/name_variants.txt` is a deterministic backstop for the summarizer: variant→canonical mappings applied via `apply_name_variants()` in `_lib.sh` after the LLM returns. The format is `<variant> -> <canonical>` per line, whole-word case-insensitive by default, with a `!` prefix opting into capitalized-only matching for variants that double as English words (e.g. `!Phoenix -> Phaenix`). Treat this file like `names.txt`: user-owned campaign data, edits are user-driven. The path is overridable via `VARIANTS_FILE`; missing file is a passthrough (no error).
-
-`names.txt` and `name_variants.txt` are **per-campaign data files**. They are gitignored; what's checked in is `names.example.txt` and `name_variants.example.txt`, which serve as templates that each user copies on setup and edits in place. On a new campaign the actual files are rebuilt from scratch (canonical-name list populated; variants seeded from observed LEAKED VARIANTS via `utils/audit_summaries.sh`). Don't treat the contents of either file as load-bearing for the pipeline scripts — the scripts gracefully handle missing or empty files. The README's "Customizing for your campaign" section is the operator-facing version of this. **Don't propagate template-file edits to the actual files (or vice versa) without explicit user direction; they have different roles.**
+**Don't propagate template-file edits to the actuals (or vice versa) without explicit user direction.** The `.example.*` is the maintainer's shipped default; the `.txt`/`.conf` is per-user data. They have different roles. The README's "Customizing for your campaign" section is the operator-facing version.
 
 ## Things to ask about, not assume
 
