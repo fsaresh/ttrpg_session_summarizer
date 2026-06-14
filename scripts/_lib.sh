@@ -29,7 +29,7 @@ unset LIB_DIR
 # Generic helpers
 # ---------------------------------------------------------------------------
 
-# Wall-clock timestamp (HH:MM:SS).
+# Wall-clock timestamp (HH:MM:SS) to use in logging.
 ts() { date +%H:%M:%S; }
 
 # Drop-in replacements for echo that prefix every line with the current
