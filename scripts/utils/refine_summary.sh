@@ -42,16 +42,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! curl -sf "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
-  logerr "Error: cannot reach Ollama at $OLLAMA_URL"
-  exit 1
-fi
-
-if ! curl -sf "$OLLAMA_URL/api/tags" | jq -e --arg m "$MODEL" '.models[] | select(.name == $m)' >/dev/null; then
-  logerr "Error: model '$MODEL' is not installed in Ollama."
-  logerr "  Pull it with: ollama pull $MODEL"
-  exit 1
-fi
+require_ollama_model
 
 if [[ ! -d "$MD_DIR" ]]; then
   logerr "Error: summaries directory does not exist: $MD_DIR"
@@ -97,7 +88,7 @@ Reminder: every occurrence in your output of any name listed in the glossary abo
 fi
 
 script_start=$(date +%s)
-log "Found ${#first_pass[@]} first-pass summary(s). Model: $MODEL  num_ctx: $NUM_CTX"
+log "Found ${#first_pass[@]} first-pass summary(s). Model: $MODEL  num_ctx ceiling: $NUM_CTX"
 
 refined=0
 skipped=0
@@ -126,55 +117,34 @@ for draft in "${first_pass[@]}"; do
   log "  ..    refining $base"
   file_start=$(date +%s)
 
-  user_content=$(jq -n \
+  prompt_bytes=$(( ${#REFINE_SYSTEM_PROMPT} + ${#NAMES_PREAMBLE} + ${#NAMES_TAIL} + $(wc -c < "$draft") + $(wc -c < "$transcript") ))
+  ctx=$(fit_num_ctx "$prompt_bytes" "$NUM_CTX")
+
+  if ! content=$(jq -n \
+    --arg model "$MODEL" \
+    --arg system "$REFINE_SYSTEM_PROMPT" \
     --arg pre "$NAMES_PREAMBLE" \
     --rawfile draft "$draft" \
     --rawfile transcript "$transcript" \
     --arg tail "$NAMES_TAIL" \
-    -r '$pre + "DRAFT OUTLINE TO REVIEW:\n\n" + $draft + "\n\nORIGINAL TRANSCRIPT:\n\n" + $transcript + $tail')
-
-  request=$(jq -n \
-    --arg model "$MODEL" \
-    --arg system "$REFINE_SYSTEM_PROMPT" \
-    --arg user "$user_content" \
-    --argjson num_ctx "$NUM_CTX" \
+    --argjson num_ctx "$ctx" \
     --argjson temperature "$REFINE_TEMPERATURE" \
     '{
       model: $model,
       messages: [
         {role: "system", content: $system},
-        {role: "user",   content: $user}
+        {role: "user",   content: ($pre + "DRAFT OUTLINE TO REVIEW:\n\n" + $draft + "\n\nORIGINAL TRANSCRIPT:\n\n" + $transcript + $tail)}
       ],
       stream: false,
       options: {num_ctx: $num_ctx, temperature: $temperature}
-    }')
-
-  response=$(curl -sf -X POST "$OLLAMA_URL/api/chat" \
-    -H 'Content-Type: application/json' \
-    -d "$request" || echo "")
-
-  if [[ -z "$response" ]]; then
-    logerr "  FAIL  $base (no response from Ollama)"
-    failed=$((failed + 1))
-    continue
-  fi
-
-  if echo "$response" | jq -e '.error' >/dev/null 2>&1; then
-    err=$(echo "$response" | jq -r '.error')
-    logerr "  FAIL  $base (Ollama error: $err)"
-    failed=$((failed + 1))
-    continue
-  fi
-
-  content=$(echo "$response" | jq -r '.message.content // empty')
-  if [[ -z "$content" ]]; then
-    logerr "  FAIL  $base (empty content in response)"
+    }' | ollama_chat "$ctx"); then
+    logerr "  FAIL  $base"
     failed=$((failed + 1))
     continue
   fi
 
   printf '%s\n' "$content" | apply_name_variants "$VARIANTS_FILE" > "$dst.tmp" && mv "$dst.tmp" "$dst"
-  log "  ok    $(basename "$dst") ($(fmt_duration $(($(date +%s) - file_start))))"
+  log "  ok    $(basename "$dst") ($(fmt_duration $(($(date +%s) - file_start))), num_ctx $ctx)"
   refined=$((refined + 1))
 done
 

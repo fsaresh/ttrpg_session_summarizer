@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Show per-session pipeline state. For each session (derived from .mp4 in
+# Show per-session pipeline state. For each session (derived from .mp4/.mov in
 # recordings/ or audio file in audio/), display whether each downstream
 # artifact exists. Useful for "which sessions need processing?" and
 # spotting stuck or partial runs.
@@ -13,24 +13,27 @@ source "$SCRIPT_DIR/../_lib.sh"
 # Optional filter: pattern matched against session stems.
 FILTER="${1:-}"
 
-# Collect session stems from recordings/*.mp4 (preferred) and audio/*.{wav,m4a,mp3,flac,ogg,aac}.
-# A "session stem" is the basename minus extension. Same stem may appear in
-# both dirs (mp4 + extracted wav); we de-dup by treating the set as a sorted
-# unique list.
-shopt -s nullglob
-mp4s=("$WORKSPACE_DIR/recordings/${FILTER}"*.mp4)
+# Collect session stems from recordings/*.{mp4,mov} (preferred) and
+# audio/*.{wav,m4a,mp3,flac,ogg,aac}. A "session stem" is the basename minus
+# extension. Same stem may appear in both dirs (video + extracted audio); we
+# de-dup by treating the set as a sorted unique list. nocaseglob so .MOV/.MP4
+# match too, matching Stage 1's glob.
+shopt -s nullglob nocaseglob
+videos=("$WORKSPACE_DIR/recordings/${FILTER}"*.mp4
+        "$WORKSPACE_DIR/recordings/${FILTER}"*.mov)
 audios=("$WORKSPACE_DIR/audio/${FILTER}"*.wav
         "$WORKSPACE_DIR/audio/${FILTER}"*.m4a
         "$WORKSPACE_DIR/audio/${FILTER}"*.mp3
         "$WORKSPACE_DIR/audio/${FILTER}"*.flac
         "$WORKSPACE_DIR/audio/${FILTER}"*.ogg
         "$WORKSPACE_DIR/audio/${FILTER}"*.aac)
-shopt -u nullglob
+shopt -u nullglob nocaseglob
 
 # Collect all stems then dedup-sort. (Avoiding bash 4 associative arrays
 # since macOS ships bash 3.2.)
 all_stems=""
-for f in "${mp4s[@]}" "${audios[@]}"; do
+# ${arr[@]+"${arr[@]}"} so an empty array doesn't trip `set -u` on bash 3.2.
+for f in ${videos[@]+"${videos[@]}"} ${audios[@]+"${audios[@]}"}; do
   [[ -e "$f" ]] || continue
   stem=$(basename "$f")
   stem="${stem%.*}"
@@ -48,9 +51,9 @@ unset IFS
 
 # Header.
 printf '%-26s  %s  %s  %s  %s  %s  %s\n' \
-  "session" "mp4" "wav" "srt" "txt" "md" "refined"
+  "session" "video" "audio" "srt" "txt" "md" "refined"
 printf '%-26s  %s  %s  %s  %s  %s  %s\n' \
-  "$(printf '%.0s-' {1..26})" "---" "---" "---" "---" "--" "-------"
+  "$(printf '%.0s-' {1..26})" "-----" "-----" "---" "---" "--" "-------"
 
 mark() { [[ -e "$1" ]] && printf '%-3s' '  •' || printf '%-3s' '   '; }
 markn() { [[ -e "$1" ]] && printf '%-7s' '   •' || printf '%-7s' '       '; }
@@ -59,13 +62,13 @@ count_total=0
 count_complete=0
 
 for stem in "${sorted[@]}"; do
-  mp4="$WORKSPACE_DIR/recordings/$stem.mp4"
-  wav="$WORKSPACE_DIR/audio/$stem.wav"
-  # The audio file might be in any of the supported formats; treat existence of any as "wav-equivalent".
-  has_audio=
-  for ext in wav m4a mp3 flac ogg aac; do
-    [[ -f "$WORKSPACE_DIR/audio/$stem.$ext" ]] && { has_audio=1; break; }
+  # The source video may be .mp4 or .mov; treat existence of any as "video present".
+  # Uppercase spellings are listed explicitly for case-sensitive volumes.
+  has_video=
+  for ext in mp4 mov MP4 MOV; do
+    [[ -f "$WORKSPACE_DIR/recordings/$stem.$ext" ]] && { has_video=1; break; }
   done
+  has_audio=$(find_audio "$WORKSPACE_DIR/audio" "$stem")
   srt="$WORKSPACE_DIR/transcripts/$stem.srt"
   txt="$WORKSPACE_DIR/transcripts/$stem.txt"
 
@@ -74,14 +77,14 @@ for stem in "${sorted[@]}"; do
   refined_mds=("$WORKSPACE_DIR/summaries/$stem--"*--refined.md)
   # mds includes refined; subtract.
   non_refined=()
-  for m in "${mds[@]}"; do
+  for m in ${mds[@]+"${mds[@]}"}; do
     [[ "$m" == *--refined.md ]] || non_refined+=("$m")
   done
   shopt -u nullglob
 
   printf '%-26s' "$stem"
-  printf '  %s' "$([[ -f "$mp4" ]] && echo "•  " || echo "   ")"
-  printf '  %s' "$([[ -n "$has_audio" ]] && echo "•  " || echo "   ")"
+  printf '  %s' "$([[ -n "$has_video" ]] && echo "•    " || echo "     ")"
+  printf '  %s' "$([[ -n "$has_audio" ]] && echo "•    " || echo "     ")"
   printf '  %s' "$([[ -f "$srt" ]] && echo "•  " || echo "   ")"
   printf '  %s' "$([[ -f "$txt" ]] && echo "•  " || echo "   ")"
   printf '  %s' "$([[ ${#non_refined[@]} -gt 0 ]] && printf '×%-2d' "${#non_refined[@]}" || echo "   ")"
@@ -95,5 +98,5 @@ for stem in "${sorted[@]}"; do
 done
 
 echo
-echo "  $count_complete / $count_total sessions have completed Stages 1-4 (mp4/audio → wav → srt → txt → md)."
+echo "  $count_complete / $count_total sessions have completed Stages 1-4 (video → audio → srt → txt → md)."
 echo "  '×N' under md/refined columns indicates how many model variants exist for that session."

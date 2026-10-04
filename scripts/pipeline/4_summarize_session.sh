@@ -34,17 +34,7 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! curl -sf "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
-  logerr "Error: cannot reach Ollama at $OLLAMA_URL"
-  logerr "  Is the service running? Try: brew services start ollama"
-  exit 1
-fi
-
-if ! curl -sf "$OLLAMA_URL/api/tags" | jq -e --arg m "$MODEL" '.models[] | select(.name == $m)' >/dev/null; then
-  logerr "Error: model '$MODEL' is not installed in Ollama."
-  logerr "  Pull it with: ollama pull $MODEL"
-  exit 1
-fi
+require_ollama_model
 
 if [[ ! -d "$TRANSCRIPTS_DIR" ]]; then
   logerr "Error: source directory does not exist: $TRANSCRIPTS_DIR"
@@ -87,7 +77,7 @@ End of transcript. Reminder: every occurrence in your output of any name listed 
 fi
 
 script_start=$(date +%s)
-log "Found ${#txt_files[@]} cleaned transcript(s). Model: $MODEL  num_ctx: $NUM_CTX"
+log "Found ${#txt_files[@]} cleaned transcript(s). Model: $MODEL  num_ctx ceiling: $NUM_CTX"
 if [[ -n "$NAMES_LIST" ]]; then
   log "Glossary loaded from $NAMES_FILE ($(wc -l <<< "$NAMES_LIST" | tr -d ' ') names)"
 fi
@@ -110,13 +100,16 @@ for src in "${txt_files[@]}"; do
   log "  ..    summarizing $base.txt"
   file_start=$(date +%s)
 
-  request=$(jq -n \
+  prompt_bytes=$(( ${#SYSTEM_PROMPT} + ${#NAMES_PREAMBLE} + ${#NAMES_TAIL} + $(wc -c < "$src") ))
+  ctx=$(fit_num_ctx "$prompt_bytes" "$NUM_CTX")
+
+  if ! content=$(jq -n \
     --arg model "$MODEL" \
     --arg system "$SYSTEM_PROMPT" \
     --arg names_preamble "$NAMES_PREAMBLE" \
     --arg names_tail "$NAMES_TAIL" \
     --rawfile content "$src" \
-    --argjson num_ctx "$NUM_CTX" \
+    --argjson num_ctx "$ctx" \
     --argjson temperature "$SUMMARIZE_TEMPERATURE" \
     '{
       model: $model,
@@ -126,34 +119,14 @@ for src in "${txt_files[@]}"; do
       ],
       stream: false,
       options: {num_ctx: $num_ctx, temperature: $temperature}
-    }')
-
-  response=$(curl -sf -X POST "$OLLAMA_URL/api/chat" \
-    -H 'Content-Type: application/json' \
-    -d "$request" || echo "")
-
-  if [[ -z "$response" ]]; then
-    logerr "  FAIL  $base.txt (no response from Ollama)"
-    failed=$((failed + 1))
-    continue
-  fi
-
-  if echo "$response" | jq -e '.error' >/dev/null 2>&1; then
-    err=$(echo "$response" | jq -r '.error')
-    logerr "  FAIL  $base.txt (Ollama error: $err)"
-    failed=$((failed + 1))
-    continue
-  fi
-
-  content=$(echo "$response" | jq -r '.message.content // empty')
-  if [[ -z "$content" ]]; then
-    logerr "  FAIL  $base.txt (empty content in response)"
+    }' | ollama_chat "$ctx"); then
+    logerr "  FAIL  $base.txt"
     failed=$((failed + 1))
     continue
   fi
 
   printf '%s\n' "$content" | apply_name_variants "$VARIANTS_FILE" > "$dst.tmp" && mv "$dst.tmp" "$dst"
-  log "  ok    $dst_name ($(fmt_duration $(($(date +%s) - file_start))))"
+  log "  ok    $dst_name ($(fmt_duration $(($(date +%s) - file_start))), num_ctx $ctx)"
   summarized=$((summarized + 1))
 done
 

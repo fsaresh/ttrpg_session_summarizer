@@ -8,7 +8,7 @@ AUDIO_DIR="$WORKSPACE_DIR/audio"
 TRANSCRIPT_DIR="$WORKSPACE_DIR/transcripts"
 
 # See README "Tier 1: transcribe_audio" for model choices and tuning notes.
-MODEL_PATH="${MODEL_PATH:-$HOME/source/external/whisper_models/ggml-large-v3.bin}"
+MODEL_PATH="${MODEL_PATH:-$HOME/source/external/whisper_models/ggml-large-v3-turbo-q5_0.bin}"
 WORD_THRESHOLD="${WORD_THRESHOLD:-0.95}"
 ENTROPY_THRESHOLD="${ENTROPY_THRESHOLD:-3.0}"
 TEMPERATURE_INC="${TEMPERATURE_INC:-0.5}"
@@ -91,7 +91,7 @@ for src in "${audio_files[@]}"; do
     transcribed=$((transcribed + 1))
   else
     logerr "  FAIL  $base (see whisper-cli output above)"
-    rm -f "$dst" "$TRANSCRIPT_DIR/$stem.json"
+    command rm -f "$dst" "$TRANSCRIPT_DIR/$stem.json"
     failed=$((failed + 1))
   fi
 done

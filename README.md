@@ -31,10 +31,10 @@ If you'd rather drive setup manually, keep reading — the sections below cover 
 ## Pipeline at a glance
 
 ```
-recordings/ (.mp4)
-    │  1_extract_audio.sh          ffmpeg: drop video, downmix to 16 kHz mono PCM, trim trailing silence
+recordings/ (.mp4 / .mov)
+    │  1_extract_audio.sh          ffmpeg: drop video, downmix to 16 kHz mono FLAC, trim trailing silence
     ▼
-audio/ (.wav)
+audio/ (.flac)
     │  2_transcribe_audio.sh        whisper.cpp: speech-to-text → SRT
     ▼
 transcripts/ (.srt + .json)
@@ -60,7 +60,7 @@ After every session, the standard run is:
   "$WORKSPACE_DIR/scripts/pipeline/4_summarize_session.sh"
 ```
 
-Every stage is idempotent: if a stage's output for a given session already exists, that session is skipped. Drop a new `.mp4` into `recordings/`, run the chain, and only the new session moves through.
+Every stage is idempotent: if a stage's output for a given session already exists, that session is skipped. Drop a new `.mp4`/`.mov` into `recordings/`, run the chain, and only the new session moves through.
 
 `WORKSPACE_DIR` is the base directory for the pipeline. The default is `$HOME/Movies/OBS` (set in `scripts/_lib.sh`). On a new machine, either accept that default, change it in `_lib.sh`, or `export WORKSPACE_DIR=/path/to/your/obs` in your shell before running anything. All four pipeline subdirectories (`recordings/`, `audio/`, `transcripts/`, `summaries/`) are derived from `WORKSPACE_DIR`.
 
@@ -73,8 +73,8 @@ $WORKSPACE_DIR/
 ├── run.sh                    ← standard per-session entry point (chains Stages 1–4)
 ├── .env.example              ← shipped environment defaults (paths, model choices, tunables)
 ├── .env                      ← gitignored; copy from .env.example to customize
-├── recordings/               ← raw OBS captures (.mp4) — populate yourself (skip if starting from audio)
-├── audio/                    ← extracted audio (.wav) — created by Stage 1, or populated yourself for audio-only runs
+├── recordings/               ← raw OBS captures (.mp4 / .mov) — populate yourself (skip if starting from audio)
+├── audio/                    ← extracted audio (.flac) — created by Stage 1, or populated yourself for audio-only runs
 ├── transcripts/              ← whisper output (.srt + .json) + cleaned plain text (.txt) — created by Stages 2-3
 ├── summaries/                ← Ollama-generated outlines (.md) — created by Stage 4
 ├── config/                   ← per-campaign data files and system prompts
@@ -89,8 +89,8 @@ $WORKSPACE_DIR/
 └── scripts/
     ├── _lib.sh                  ← shared helpers (logging, duration formatting, names parsing, name-variant rewriter); sources the .env file
     ├── pipeline/                ← the four core stages — one stage per script, run in order by ../run.sh
-    │   ├── 1_extract_audio.sh        ← Stage 1: mp4 → wav
-    │   ├── 2_transcribe_audio.sh     ← Stage 2: wav → srt + json (whisper.cpp)
+    │   ├── 1_extract_audio.sh        ← Stage 1: mp4/mov → flac
+    │   ├── 2_transcribe_audio.sh     ← Stage 2: audio → srt + json (whisper.cpp)
     │   ├── 3_clean_transcript.sh     ← Stage 3: srt/json → txt (with [?] markers on low-confidence tokens)
     │   └── 4_summarize_session.sh    ← Stage 4: txt → md (Ollama, with name-variant post-pass)
     └── utils/                   ← optional helpers — never invoked by ../run.sh
@@ -99,7 +99,7 @@ $WORKSPACE_DIR/
         ├── refine_summary.sh       ← optional second-pass LLM review: transcript + draft summary → improved outline (writes <session>--<model>--refined.md)
         ├── audit_summaries.sh      ← report canonical-name and leaked-variant counts per summary; surfaces gaps in name_variants.txt
         ├── lint_glossary.sh        ← validate names.txt and name_variants.txt for duplicates, malformed rules, unknown canonicals
-        └── clear_session.sh        ← delete Stage 2-4 artifacts for a session (keeps the .mp4 and .wav); supports --list and --yes
+        └── clear_session.sh        ← delete Stage 2-4 artifacts for a session (keeps the source video and extracted audio); supports --list and --yes
 ```
 
 **Configuration model:** `.env.example` at the repo root is a single bash-sourced file holding all paths and tunables (workspace location, model choices, thresholds). On first setup, copy it to `.env` and edit. If you don't create `.env`, `.env.example` is sourced as fallback. Values in `.env` are authoritative — they override any same-named env var in your shell. Edit `.env` to change settings rather than `export`-ing in your shell rc; config lives in one place.
@@ -149,15 +149,17 @@ mkdir -p "$WORKSPACE_DIR"/{recordings,audio,transcripts,summaries,config,scripts
 # Then place this repo's scripts/ and config/ contents (and the .env file)
 # in $WORKSPACE_DIR/.
 
-# 4. Whisper.cpp model (~3 GB; large-v3 for best fantasy-name accuracy).
+# 4. Whisper.cpp model (~550 MB; large-v3-turbo, quantized. Swap in
+#    ggml-large-v3.bin (~3 GB) if you want the last bit of name accuracy
+#    and don't mind transcription taking several times longer).
 #    The default lives at $HOME/source/external/whisper_models/. To relocate
 #    (e.g. external drive), set WHISPER_MODELS_DIR in your shell rc and use
 #    the same path in `mkdir -p` and `curl -o` below; also set it in
 #    config/settings.conf so the pipeline finds the file.
 WHISPER_MODELS_DIR="${WHISPER_MODELS_DIR:-$HOME/source/external/whisper_models}"
 mkdir -p "$WHISPER_MODELS_DIR"
-curl -L -o "$WHISPER_MODELS_DIR/ggml-large-v3.bin" \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
+curl -L -o "$WHISPER_MODELS_DIR/ggml-large-v3-turbo-q5_0.bin" \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin
 
 # 5. Ollama summarization model (~20 GB; pulls once, takes a while).
 #    Ollama stores models at ~/.ollama/models by default; to relocate (disk
@@ -196,7 +198,7 @@ $EDITOR "$WORKSPACE_DIR/config/name_variants.txt"
 "$WORKSPACE_DIR/scripts/utils/setup_check.sh"
 
 # 9. Drop your first source file in and run the pipeline:
-#      OBS / video capture path: place the .mp4 in $WORKSPACE_DIR/recordings/
+#      OBS / video capture path: place the .mp4 or .mov in $WORKSPACE_DIR/recordings/
 #      audio-only path:           place the audio file in $WORKSPACE_DIR/audio/
 #                                 (.wav / .m4a / .mp3 / .flac / .ogg / .aac)
 "$WORKSPACE_DIR/run.sh"
@@ -204,9 +206,9 @@ $EDITOR "$WORKSPACE_DIR/config/name_variants.txt"
 
 ## Starting from audio files (no video)
 
-The pipeline also works if your source is already an audio file rather than an OBS-captured `.mp4` — useful for podcast-style recordings, Zoom/Discord exports, or any recorder that doesn't produce video.
+The pipeline also works if your source is already an audio file rather than an OBS-captured video — useful for podcast-style recordings, Zoom/Discord exports, or any recorder that doesn't produce video.
 
-Drop the audio file directly into `$WORKSPACE_DIR/audio/` (any of `.wav`, `.m4a`, `.mp3`, `.flac`, `.ogg`, `.aac`). Stage 1 (`pipeline/1_extract_audio.sh`) finds no `.mp4` in `recordings/` and exits cleanly as a no-op. Stage 2's whisper-cli accepts any of those formats directly, so the rest of the pipeline runs unchanged. `run.sh` is the same entry point for both cases.
+Drop the audio file directly into `$WORKSPACE_DIR/audio/` (any of `.wav`, `.m4a`, `.mp3`, `.flac`, `.ogg`, `.aac`). Stage 1 (`pipeline/1_extract_audio.sh`) finds no video in `recordings/` and exits cleanly as a no-op. Stage 2's whisper-cli accepts any of those formats directly, so the rest of the pipeline runs unchanged. `run.sh` is the same entry point for both cases.
 
 If you prefer to skip Stage 1 entirely, run the remaining stages individually:
 
@@ -239,15 +241,25 @@ Other settings tuned to the maintainer's setup that you may want to revisit:
 
 ## Hardware sizing
 
-The shipped defaults (whisper `large-v3` + Ollama `qwen2.5:32b-instruct-q4_K_M` at `NUM_CTX=65536`) target ~32 GB unified-memory Apple Silicon. On smaller or non-Apple-Silicon machines, downsize:
+The shipped defaults (whisper `large-v3-turbo-q5_0` + Ollama `qwen2.5:32b-instruct-q4_K_M` at `NUM_CTX=65536`) target ~32 GB unified-memory Apple Silicon. On smaller or non-Apple-Silicon machines, downsize:
 
 | RAM (unified or system) | Whisper model | Ollama model | `NUM_CTX` | Notes |
 |---|---|---|---|---|
 | 8 GB | `ggml-medium.en.bin` (~1.5 GB) | `llama3.2:3b-instruct-q4_K_M` (~2 GB) | `16384` | Tight; close other apps. Name accuracy will suffer — `medium.en` is English-only and weak on fantasy names; populate `name_variants.txt` aggressively to compensate. |
 | 16 GB | `ggml-large-v3-turbo-q5_0.bin` (~1.5 GB) | `qwen2.5:7b-instruct-q4_K_M` (~5 GB) | `32768` | Comfortable mid-tier. Good speed, decent name accuracy. |
 | 24 GB | `ggml-large-v3-turbo-q5_0.bin` or `ggml-large-v3.bin` | `qwen2.5:14b-instruct-q4_K_M` (~9 GB) | `32768`–`65536` | Strong accuracy at reasonable speed. |
-| 32 GB | `ggml-large-v3.bin` (~3 GB) | `qwen2.5:32b-instruct-q4_K_M` (~20 GB) | `65536` | **Shipped defaults.** |
+| 32 GB | `ggml-large-v3-turbo-q5_0.bin` (~550 MB) | `qwen2.5:32b-instruct-q4_K_M` (~20 GB) | `65536` | **Shipped defaults.** `ggml-large-v3.bin` (~3 GB) is slightly more accurate and several times slower. |
 | 48 GB+ | `ggml-large-v3.bin` | `llama3.3:70b-instruct-q4_K_M` (~40 GB) | `65536`+ | Highest local quality. Still tight at 48 GB unified — close everything else. |
+
+**Shrinking Ollama's memory use.** The context window's memory (KV cache) grows with `num_ctx`: about 16 GB for `qwen2.5:32b` at 65536. Stage 4 already sizes each request to its transcript (see Stage 4). To halve that memory again, run the Ollama daemon with flash attention and an 8-bit KV cache. Like `OLLAMA_MODELS`, these must be in the daemon's environment at startup; setting them in `.env` does nothing:
+
+```bash
+launchctl setenv OLLAMA_FLASH_ATTENTION 1
+launchctl setenv OLLAMA_KV_CACHE_TYPE q8_0
+brew services restart ollama
+```
+
+`launchctl setenv` lasts until reboot; add the same lines to a login script to keep them.
 
 To switch models, edit `.env` at the repo root — values there take precedence over shell exports, so the file is the single source of truth:
 
@@ -262,19 +274,19 @@ NUM_CTX=32768
 
 **No GPU at all** for Ollama: small models (3–7B) run at 5–15 tokens/sec on a modern CPU and summarize a 3-hour session in a few minutes. Don't run `qwen2.5:32b` CPU-only — it'll take tens of minutes per summary.
 
-**Low disk**: whisper models are 1.5–3 GB each, Ollama models 2–40 GB each — you only need one of each. Audio files are ~115 MB/hour; transcripts and summaries are tiny.
+**Low disk**: whisper models are 1.5–3 GB each, Ollama models 2–40 GB each — you only need one of each. Audio files are ~70 MB/hour as FLAC; transcripts and summaries are tiny.
 
 ---
 
 ## Stage 1 — `pipeline/1_extract_audio.sh`
 
-Reads `recordings/*.mp4`, writes `audio/*.wav`. The source mp4 is opened read-only; only the destination wav is written.
+Reads `recordings/*.mp4` and `recordings/*.mov` (extension match is case-insensitive, so `.MOV` from QuickTime/iOS works too), writes `audio/*.flac`. The source video is opened read-only; only the destination audio file is written. Output is named after the source stem, so `session-01.mov` → `session-01.flac`. A session is skipped if `audio/` already has a file for its stem in any supported format (older sessions may still have a `.wav`); if both `session-01.mp4` and `session-01.mov` exist, the second one seen is skipped as already-extracted.
 
 **What it does**
 - Drops the video stream entirely
 - Downmixes to mono and resamples to 16 kHz, the native rate whisper would resample to internally anyway
-- Encodes as 16-bit PCM (lossless at this sample rate, ~115 MB/hour)
-- Trims **trailing silence only** using `areverse → silenceremove → areverse`. Mid-session pauses (dramatic beats, rule-checks) are preserved; only the dead-air after the session genuinely ended gets cut. This avoids Whisper hallucinating during silence.
+- Encodes as 16-bit FLAC (lossless, ~70 MB/hour vs ~115 MB/hour for WAV)
+- Trims **trailing silence only** using `areverse → silenceremove → areverse`. The downmix runs first, so `areverse` buffers the whole session at 16 kHz mono (~1.5 GB peak for 3 hours) instead of the source's 48 kHz stereo (~6 GB). Mid-session pauses (dramatic beats, rule-checks) are preserved; only the dead-air after the session genuinely ended gets cut. This avoids Whisper hallucinating during silence.
 
 **Tunable env vars**
 
@@ -287,13 +299,13 @@ Reads `recordings/*.mp4`, writes `audio/*.wav`. The source mp4 is opened read-on
 
 ## Stage 2 — `pipeline/2_transcribe_audio.sh`
 
-Reads `audio/*.wav`, writes `transcripts/*.srt` (timestamped subtitle file) and `transcripts/*.json` (per-token output including a confidence value `p` per token) via whisper.cpp. Runs on Apple Silicon Metal automatically. The `.json` is consumed by Stage 3 to mark low-confidence tokens; the `.srt` remains the human-readable timestamp reference.
+Reads `audio/*` (`.flac`, `.wav`, `.m4a`, `.mp3`, `.ogg`, `.aac`), writes `transcripts/*.srt` (timestamped subtitle file) and `transcripts/*.json` (per-token output including a confidence value `p` per token) via whisper.cpp. Runs on Apple Silicon Metal automatically. The `.json` is consumed by Stage 3 to mark low-confidence tokens; the `.srt` remains the human-readable timestamp reference.
 
 **Tunable env vars**
 
 | Var | Default | Purpose |
 |---|---|---|
-| `MODEL_PATH` | `~/source/external/whisper_models/ggml-large-v3.bin` | Whisper.cpp GGML model file. See "Model choices" below. |
+| `MODEL_PATH` | `~/source/external/whisper_models/ggml-large-v3-turbo-q5_0.bin` | Whisper.cpp GGML model file. See [Hardware sizing](#hardware-sizing). |
 | `WORD_THRESHOLD` | `0.95` | Confidence required for the model to emit a timestamp boundary. Higher = longer SRT segments. `0.01` (default) fragments per micro-pause; `0.95` gives multi-sentence chunks; `0.99` very long. |
 | `ENTROPY_THRESHOLD` | `3.0` | Threshold above which a decode is declared "failed" and triggers temperature fallback. Repetition loops are low-entropy, so a higher threshold catches more loops. Default whisper.cpp value is `2.40`. |
 | `TEMPERATURE_INC` | `0.5` | Temperature increment on each fallback retry. Bigger jump = better chance of escaping a loop on the first retry. Default whisper.cpp value is `0.2`. |
@@ -343,11 +355,14 @@ MODEL=llama3.3:70b-instruct-q4_K_M ./pipeline/4_summarize_session.sh           #
 | Var | Default | Purpose |
 |---|---|---|
 | `MODEL` | `qwen2.5:32b-instruct-q4_K_M` | Ollama model tag. See "Model choices" below. |
-| `NUM_CTX` | `65536` | Total context window (input + output). Ollama's default 2048 would truncate any real session. Bump if you ever record sessions that don't fit. |
+| `NUM_CTX` | `65536` | Ceiling on the context window (input + output). Each request gets just enough context for its transcript (see below), up to this value. |
+| `OLLAMA_TIMEOUT` | `3600` | Seconds to wait for one reply before marking that session failed. |
 | `SUMMARIZE_TEMPERATURE` | `0.3` | Lower = more faithful extraction. Bump to 0.5 only if outlines feel mechanical. |
 | `OLLAMA_URL` | `http://localhost:11434` | Where Ollama is listening. Change if you remote-host it. |
 | `NAMES_FILE` | `config/names.txt` | Glossary of canonical proper nouns; injected into the LLM's user message so it normalizes variant spellings. See "Names glossary" above. |
 | `VARIANTS_FILE` | `config/name_variants.txt` | Deterministic variant→canonical rewrite rules applied to the LLM's output as a post-pass. See "Variant → canonical post-pass" above. |
+
+**Context sizing.** Ollama reserves memory for the full `num_ctx` on every request, and it silently drops input that doesn't fit. So for each transcript the script estimates the prompt at 3 bytes per token (deliberately high), adds 4096 tokens for the reply, and rounds up to a multiple of 8192, capped at `NUM_CTX`. A typical 3-hour session gets 32768–40960. After each reply the script compares Ollama's reported token counts with the window and logs a warning if the window was at least 95% full, which means the transcript may have been cut off. If you see that warning, raise `NUM_CTX`. `utils/refine_summary.sh` sizes its requests the same way.
 
 Ollama models are pulled with `ollama pull <tag>`. See [Hardware sizing](#hardware-sizing) for the recommended tag per RAM tier.
 
@@ -382,7 +397,7 @@ For "redo transcription, cleaning, and summarization", use the helper:
 ./utils/clear_session.sh 2026-04-21 -l           # list matching files; do not delete
 ```
 
-This deletes the `.srt`, `.json`, and `.txt` from `transcripts/`, plus any model-tagged `.md` files from `summaries/`. The original `.mp4` in `recordings/` and the extracted `.wav` in `audio/` are never touched — `.wav` extraction is slow and rarely needs to change. If you do want to rerun Stage 1 (e.g., you tweaked `SILENCE_THRESHOLD`), delete the `.wav` manually first.
+This deletes the `.srt`, `.json`, and `.txt` from `transcripts/`, plus any model-tagged `.md` files from `summaries/`. The original video in `recordings/` and the extracted audio in `audio/` are never touched — extraction is slow and rarely needs to change. If you do want to rerun Stage 1 (e.g., you tweaked `SILENCE_THRESHOLD`), delete the session's audio file manually first.
 
 The script requires the argument to start with a full `YYYY-MM-DD` date so a short or empty prefix can't accidentally wipe a wide swath of artifacts. Then re-run the pipeline chain to rebuild from scratch.
 
@@ -419,7 +434,9 @@ Then `./run.sh` (or invoke each `scripts/pipeline/*.sh` stage individually) and 
 
 **Ollama errors with "model not found".** `ollama pull <model-tag>` (the tag is what's set in `MODEL`, e.g. `qwen2.5:32b-instruct-q4_K_M`).
 
-**Out of memory during summarization.** Drop to a smaller model (`qwen2.5:14b-instruct-q4_K_M`) or lower `NUM_CTX` (e.g. 32768).
+**Out of memory during summarization.** First enable the daemon settings under "Shrinking Ollama's memory use" in [Hardware sizing](#hardware-sizing). If that isn't enough, drop to a smaller model (`qwen2.5:14b-instruct-q4_K_M`) or lower `NUM_CTX` (e.g. 32768).
+
+**"used N of M context tokens; the input may have been truncated".** The session didn't fit the context window. Raise `NUM_CTX` in `.env`, delete that session's summary, and run Stage 4 again.
 
 ---
 

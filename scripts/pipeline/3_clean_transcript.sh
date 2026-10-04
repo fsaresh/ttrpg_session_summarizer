@@ -76,7 +76,7 @@ for src in "${srt_files[@]}"; do
     cleaned=$((cleaned + 1))
   else
     logerr "  FAIL  $base.srt (see jq/awk output above)"
-    rm -f "$dst.tmp" "$dst"
+    command rm -f "$dst.tmp" "$dst"
     failed=$((failed + 1))
   fi
 done

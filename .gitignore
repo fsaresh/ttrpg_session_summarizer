@@ -8,3 +8,5 @@ config/names.txt
 config/name_variants.txt
 config/summary_prompt.txt
 config/refine_prompt.txt
+temp/
+.DS_Store

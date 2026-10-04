@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Standard per-session entry point: chains the four core pipeline stages.
-# Run this after dropping a new .mp4 into recordings/ (or audio file into
+# Run this after dropping a new .mp4/.mov into recordings/ (or audio file into
 # audio/). All four stages are idempotent — already-processed sessions are
 # skipped automatically.
 #

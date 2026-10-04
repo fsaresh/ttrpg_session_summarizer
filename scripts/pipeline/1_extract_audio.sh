@@ -23,12 +23,12 @@ fi
 
 mkdir -p "$AUDIO_DIR"
 
-shopt -s nullglob
-mp4_files=("$RECORDINGS_DIR"/*.mp4)
-shopt -u nullglob
+shopt -s nullglob nocaseglob
+video_files=("$RECORDINGS_DIR"/*.mp4 "$RECORDINGS_DIR"/*.mov)
+shopt -u nullglob nocaseglob
 
-if [[ ${#mp4_files[@]} -eq 0 ]]; then
-  log "No mp4 files found in $RECORDINGS_DIR"
+if [[ ${#video_files[@]} -eq 0 ]]; then
+  log "No video files (.mp4/.mov) found in $RECORDINGS_DIR"
   shopt -s nullglob
   audio_present=("$AUDIO_DIR"/*.wav "$AUDIO_DIR"/*.m4a "$AUDIO_DIR"/*.mp3 "$AUDIO_DIR"/*.flac "$AUDIO_DIR"/*.ogg "$AUDIO_DIR"/*.aac)
   shopt -u nullglob
@@ -39,34 +39,36 @@ if [[ ${#mp4_files[@]} -eq 0 ]]; then
 fi
 
 script_start=$(date +%s)
-log "Found ${#mp4_files[@]} mp4 file(s)."
+log "Found ${#video_files[@]} video file(s)."
 
 extracted=0
 skipped=0
 failed=0
 
-for src in "${mp4_files[@]}"; do
-  base=$(basename "$src" .mp4)
-  dst="$AUDIO_DIR/$base.wav"
+for src in "${video_files[@]}"; do
+  name=$(basename "$src")
+  base="${name%.*}"
+  dst="$AUDIO_DIR/$base.flac"
 
-  if [[ -e "$dst" ]]; then
-    log "  skip  $base.wav (already exists)"
+  existing=$(find_audio "$AUDIO_DIR" "$base")
+  if [[ -n "$existing" ]]; then
+    log "  skip  $(basename "$existing") (already exists)"
     skipped=$((skipped + 1))
     continue
   fi
 
-  log "  ..    extracting $base.mp4"
+  log "  ..    extracting $name"
   file_start=$(date +%s)
   if ffmpeg -hide_banner -loglevel error -n \
       -i "$src" \
-      -vn -ac 1 -ar 16000 -c:a pcm_s16le -map_metadata -1 -map_chapters -1 \
-      -af "areverse,silenceremove=start_periods=1:start_duration=${SILENCE_DURATION}:start_threshold=${SILENCE_THRESHOLD},areverse" \
+      -vn -ac 1 -ar 16000 -c:a flac -sample_fmt s16 -map_metadata -1 -map_chapters -1 \
+      -af "aformat=sample_rates=16000:channel_layouts=mono,areverse,silenceremove=start_periods=1:start_duration=${SILENCE_DURATION}:start_threshold=${SILENCE_THRESHOLD},areverse" \
       "$dst"; then
-    log "  ok    $base.wav ($(fmt_duration $(($(date +%s) - file_start))))"
+    log "  ok    $base.flac ($(fmt_duration $(($(date +%s) - file_start))))"
     extracted=$((extracted + 1))
   else
-    logerr "  FAIL  $base.mp4 (see ffmpeg output above)"
-    rm -f "$dst"
+    logerr "  FAIL  $name (see ffmpeg output above)"
+    command rm -f "$dst"
     failed=$((failed + 1))
   fi
 done

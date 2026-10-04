@@ -2,10 +2,10 @@
 #
 # Clear derived artifacts (transcripts, summaries) for a given session —
 # useful when you want to rerun Stages 2-4 from scratch on a specific
-# session. The original .mp4 in recordings/ and the extracted .wav in
-# audio/ are never touched: regenerating the .wav is slow (ffmpeg has to
-# re-process the full mp4) and unnecessary unless the extraction params
-# changed. If you need to reset the .wav too, delete it manually.
+# session. The original video in recordings/ and the extracted audio in
+# audio/ are never touched: regenerating the audio is slow (ffmpeg has to
+# re-process the full recording) and unnecessary unless the extraction params
+# changed. If you need to reset the audio too, delete it manually.
 #
 # Argument is a glob prefix matched against the session filename stem, so:
 #   2026-04-21_19-51-46   → exactly that session
@@ -24,7 +24,7 @@ if [[ $# -lt 1 ]]; then
 Usage: $(basename "$0") <session-id-or-prefix> [-y|--yes|-l|--list]
 
 Clears transcripts/ and summaries/ entries for the given session.
-Keeps the original .mp4 in recordings/ and the extracted .wav in audio/.
+Keeps the original .mp4/.mov in recordings/ and the extracted audio in audio/
 
 Examples:
   $(basename "$0") 2026-04-21_19-51-46    # specific session
@@ -86,7 +86,7 @@ for f in "${all_files[@]}"; do
   echo "  $f"
 done
 echo
-echo "(recordings/${PATTERN}*.mp4 and audio/${PATTERN}*.wav will NOT be touched.)"
+echo "(recordings/${PATTERN}*.mp4|.mov and audio/${PATTERN}*.{flac,wav,...} will NOT be touched.)"
 echo
 
 if [[ "$ASSUME_YES" != "true" ]]; then

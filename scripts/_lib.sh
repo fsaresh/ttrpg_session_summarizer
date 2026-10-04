@@ -4,8 +4,8 @@
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #   source "$SCRIPT_DIR/_lib.sh"
 #
-# This file holds helpers only — logging, duration formatting, and
-# glossary parsing. Workspace paths and per-machine settings come from
+# This file holds helpers only — logging, duration formatting, audio
+# lookup, Ollama requests, and glossary parsing. Workspace paths and per-machine settings come from
 # the .env file at repo root (or .env.example as fallback), sourced below.
 
 # ---------------------------------------------------------------------------
@@ -50,6 +50,75 @@ fmt_duration() {
   else
     printf '%dh%02dm%02ds' $((sec / 3600)) $((sec % 3600 / 60)) $((sec % 60))
   fi
+}
+
+# Print the path of the audio file for a session stem (any supported
+# extension), or nothing if there isn't one.
+#   audio=$(find_audio "$AUDIO_DIR" "$stem")
+find_audio() {
+  local dir="$1" stem="$2" ext
+  for ext in flac wav m4a mp3 ogg aac; do
+    if [[ -f "$dir/$stem.$ext" ]]; then
+      printf '%s\n' "$dir/$stem.$ext"
+      return
+    fi
+  done
+}
+
+# ---------------------------------------------------------------------------
+# Ollama helpers
+# ---------------------------------------------------------------------------
+
+# Exit with an error unless Ollama is reachable and has $MODEL pulled.
+require_ollama_model() {
+  local tags
+  if ! tags=$(curl -sf --max-time 10 "$OLLAMA_URL/api/tags"); then
+    logerr "Error: cannot reach Ollama at $OLLAMA_URL"
+    logerr "  Is the service running? Try: brew services start ollama"
+    exit 1
+  fi
+  if ! jq -e --arg m "$MODEL" '.models[] | select(.name == $m)' <<<"$tags" >/dev/null; then
+    logerr "Error: model '$MODEL' is not installed in Ollama."
+    logerr "  Pull it with: ollama pull $MODEL"
+    exit 1
+  fi
+}
+
+# Size the context window for a prompt of the given byte count: a
+# conservative 3 bytes/token estimate plus room for the reply, rounded up to
+# a multiple of 8192, capped at the ceiling. See README "Stage 4".
+#   ctx=$(fit_num_ctx "$prompt_bytes" "$NUM_CTX")
+fit_num_ctx() {
+  local bytes=$1 ceiling=$2
+  local ctx=$(( (bytes / 3 + 4096 + 8191) / 8192 * 8192 ))
+  (( ctx > ceiling )) && ctx=$ceiling
+  printf '%d\n' "$ctx"
+}
+
+# Send an /api/chat request (JSON on stdin) to Ollama and print the reply
+# text. Logs the reason and returns 1 on failure. Warns when the request
+# nearly filled the context window, since Ollama truncates overflow silently.
+#   reply=$(jq -n '...' | ollama_chat "$ctx")
+ollama_chat() {
+  local num_ctx=$1 response err content used
+  if ! response=$(curl -s --fail-with-body --max-time "${OLLAMA_TIMEOUT:-3600}" \
+      -X POST "$OLLAMA_URL/api/chat" \
+      -H 'Content-Type: application/json' \
+      --data-binary @-); then
+    err=$(jq -r '.error // empty' <<<"$response" 2>/dev/null || true)
+    logerr "        Ollama request failed${err:+: $err}"
+    return 1
+  fi
+  content=$(jq -r '.message.content // empty' <<<"$response")
+  if [[ -z "$content" ]]; then
+    logerr "        empty content in Ollama response"
+    return 1
+  fi
+  used=$(jq -r '(.prompt_eval_count // 0) + (.eval_count // 0)' <<<"$response")
+  if (( used * 100 >= num_ctx * 95 )); then
+    logerr "        warning: used $used of $num_ctx context tokens; the input may have been truncated. Raise NUM_CTX."
+  fi
+  printf '%s\n' "$content"
 }
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ Maintainer notes for the OBS recording → transcript → summary pipeline. The 
 Four-stage Bash pipeline that converts OBS-recorded TTRPG sessions into structured outlines:
 
 ```
-recordings/*.mp4 → audio/*.wav → transcripts/*.srt → transcripts/*.txt → summaries/*--<model>.md
+recordings/*.mp4 → audio/*.flac → transcripts/*.srt → transcripts/*.txt → summaries/*--<model>.md
                   pipeline/extract_audio   pipeline/transcribe_audio   pipeline/clean_transcript   pipeline/summarize_session
 ```
 
@@ -61,7 +61,7 @@ $WORKSPACE_DIR/        README.md, CLAUDE.md, run.sh,
                        recordings/, audio/, transcripts/, summaries/,
                        config/, scripts/
 recordings/            raw .mp4 (never modified)
-audio/                 .wav (16 kHz mono PCM, ffmpeg output) — also accepts user-provided .wav/.m4a/.mp3/.flac/.ogg/.aac for audio-only mode
+audio/                 .flac (16 kHz mono, ffmpeg output; older sessions may be .wav) — also accepts user-provided .wav/.m4a/.mp3/.flac/.ogg/.aac for audio-only mode
 transcripts/           .srt + .json + .txt side by side (whisper.cpp emits .srt+.json; cleaner emits .txt)
 summaries/             .md, model-tagged (Ollama). `--refined.md` suffix marks refiner output.
 config/                names.txt + names.example.txt, name_variants.txt + name_variants.example.txt,
