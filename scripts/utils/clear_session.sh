@@ -7,9 +7,11 @@
 # re-process the full recording) and unnecessary unless the extraction params
 # changed. If you need to reset the audio too, delete it manually.
 #
-# Argument is a glob prefix matched against the session filename stem, so:
-#   2026-04-21_19-51-46   → exactly that session
-#   2026-04-21            → all sessions recorded on that date
+# Argument is matched against the session filename stem, with or without
+# its group prefix (see README "Session groups"), so:
+#   nature_2026-04-21_19-51-46 → exactly that session
+#   2026-04-21_19-51-46        → that session, whatever its group
+#   2026-04-21                 → all sessions recorded on that date
 #
 # Pass -y / --yes to skip the confirmation prompt.
 # Pass -l / --list to print the matching files and exit without deleting.
@@ -27,7 +29,8 @@ Clears transcripts/ and summaries/ entries for the given session.
 Keeps the original .mp4/.mov in recordings/ and the extracted audio in audio/
 
 Examples:
-  $(basename "$0") 2026-04-21_19-51-46    # specific session
+  $(basename "$0") nature_2026-04-21_19-51-46  # specific session
+  $(basename "$0") 2026-04-21_19-51-46    # same session, any group
   $(basename "$0") 2026-04-21             # all sessions on that date
   $(basename "$0") 2026-04-21 -y          # skip confirmation
   $(basename "$0") 2026-04-21 -l          # list matching files; do not delete
@@ -43,21 +46,26 @@ case "${2:-}" in
   -l|--list) LIST_ONLY="true" ;;
 esac
 
-# Require the pattern to start with a full YYYY-MM-DD date so a stray short
+# Require the pattern to start with a full YYYY-MM-DD date (after an optional
+# group prefix) so a stray short
 # prefix (e.g. "2026", "*", or empty) can't accidentally wipe a wide swath
 # of derived artifacts.
-if [[ ! "$PATTERN" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
-  echo "Error: pattern must start with YYYY-MM-DD (e.g. 2026-04-21)." >&2
+if [[ ! "$PATTERN" =~ ^([A-Za-z0-9][A-Za-z0-9_-]*_)?[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+  echo "Error: pattern must start with YYYY-MM-DD or <group>_YYYY-MM-DD (e.g. 2026-04-21, nature_2026-04-21)." >&2
   echo "       Got: '$PATTERN'" >&2
   exit 1
 fi
 
-shopt -s nullglob
-srts=("$WORKSPACE_DIR/transcripts/${PATTERN}"*.srt)
-txts=("$WORKSPACE_DIR/transcripts/${PATTERN}"*.txt)
-jsons=("$WORKSPACE_DIR/transcripts/${PATTERN}"*.json)
-mds=("$WORKSPACE_DIR/summaries/${PATTERN}"*.md)
-shopt -u nullglob
+# A bare date also matches the same date under any group prefix.
+GLOB="$PATTERN"
+[[ "$PATTERN" =~ ^[0-9] ]] && GLOB="?(*_)$PATTERN"
+
+shopt -s nullglob extglob
+srts=("$WORKSPACE_DIR/transcripts/"$GLOB*.srt)
+txts=("$WORKSPACE_DIR/transcripts/"$GLOB*.txt)
+jsons=("$WORKSPACE_DIR/transcripts/"$GLOB*.json)
+mds=("$WORKSPACE_DIR/summaries/"$GLOB*.md)
+shopt -u nullglob extglob
 
 # bash 3.2 (macOS default) treats "${empty_array[@]}" as an unbound-variable
 # error under `set -u`, so build all_files conditionally.

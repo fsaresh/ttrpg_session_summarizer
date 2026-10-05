@@ -104,6 +104,17 @@ $WORKSPACE_DIR/
 
 **Configuration model:** `.env.example` at the repo root is a single bash-sourced file holding all paths and tunables (workspace location, model choices, thresholds). On first setup, copy it to `.env` and edit. If you don't create `.env`, `.env.example` is sourced as fallback. Values in `.env` are authoritative — they override any same-named env var in your shell. Edit `.env` to change settings rather than `export`-ing in your shell rc; config lives in one place.
 
+## Session groups
+
+Name each recording `<group>_<YYYY-MM-DD_HH-MM-SS>.<ext>`, where `<group>` says which campaign or table the session belongs to (e.g. `nature_2026-09-17_18-31-42.mp4`). Group names can use letters, digits, hyphens, and underscores (e.g. `curse-of-strahd_`, `spirit_world_`), starting with a letter or digit. Every stage names its output after the source file's stem, so the prefix carries through to `audio/`, `transcripts/`, and `summaries/` (e.g. `summaries/nature_2026-09-17_18-31-42--<model>.md`) with no extra setup.
+
+If you add or change a prefix on a recording that's already been processed, rename its audio, transcript, and summary files the same way. Otherwise the pipeline treats it as a new session and processes it again from scratch.
+
+The utilities accept groups too:
+
+- `utils/status.sh`, `utils/refine_summary.sh`, and `utils/audit_summaries.sh` take an optional filter that matches anywhere in the name: `nature_`, a date, or a full session name.
+- `utils/clear_session.sh` takes a date (matches that date in any group) or `<group>_<date>`.
+
 ## Names glossary
 
 `config/names.txt` holds canonical spellings of campaign proper nouns (PCs, NPCs, locations, etc.). Both Stage 2 and Stage 4 use it to keep names consistent across runs:
@@ -339,7 +350,7 @@ Reads `transcripts/*.srt` (and `transcripts/*.json` if present), writes `transcr
 
 ## Stage 4 — `pipeline/4_summarize_session.sh`
 
-Reads `transcripts/*.txt`, writes `summaries/<session>--<model>.md` via a local LLM served by Ollama. The output filename includes the sanitized model tag (e.g. `2026-04-21_19-51-46--qwen2.5-32b-instruct-q4_K_M.md`) so multiple models can summarize the same session without conflict — useful for A/B testing models against each other.
+Reads `transcripts/*.txt`, writes `summaries/<session>--<model>.md` via a local LLM served by Ollama. The output filename includes the sanitized model tag (e.g. `nature_2026-04-21_19-51-46--qwen2.5-32b-instruct-q4_K_M.md`) so multiple models can summarize the same session without conflict — useful for A/B testing models against each other.
 
 The script bakes in a TTRPG-tuned system prompt that produces a structured outline with these sections: **Session beats / NPCs encountered / Key decisions and outcomes / Lore, clues, and worldbuilding / Items, magic, abilities of note / Character moments / Open threads / Notable quotes**. The prompt forbids invention and requires preserving all proper nouns verbatim.
 
@@ -391,22 +402,22 @@ Ollama models live under `~/.ollama/models` (override with `OLLAMA_MODELS` expor
 For "redo transcription, cleaning, and summarization", use the helper:
 
 ```bash
-./utils/clear_session.sh 2026-04-21_19-51-46     # specific session
-./utils/clear_session.sh 2026-04-21              # all sessions on that date
+./utils/clear_session.sh nature_2026-04-21_19-51-46  # specific session
+./utils/clear_session.sh 2026-04-21              # all sessions on that date, any group
 ./utils/clear_session.sh 2026-04-21 -y           # skip the confirmation prompt
 ./utils/clear_session.sh 2026-04-21 -l           # list matching files; do not delete
 ```
 
 This deletes the `.srt`, `.json`, and `.txt` from `transcripts/`, plus any model-tagged `.md` files from `summaries/`. The original video in `recordings/` and the extracted audio in `audio/` are never touched — extraction is slow and rarely needs to change. If you do want to rerun Stage 1 (e.g., you tweaked `SILENCE_THRESHOLD`), delete the session's audio file manually first.
 
-The script requires the argument to start with a full `YYYY-MM-DD` date so a short or empty prefix can't accidentally wipe a wide swath of artifacts. Then re-run the pipeline chain to rebuild from scratch.
+The script requires the argument to start with a full `YYYY-MM-DD` date (optionally after a `<group>_` prefix) so a short or empty prefix can't accidentally wipe a wide swath of artifacts. Then re-run the pipeline chain to rebuild from scratch.
 
 ### Partial reset — manual `rm`
 
 For redoing just one or two stages, delete only those outputs. Summary files are tagged with the model name (`<session>--<model>.md`), so a wildcard glob clears all model variants at once.
 
 ```bash
-SESSION="2026-04-21_19-51-46"
+SESSION="nature_2026-04-21_19-51-46"
 
 # rerun summary only (clears all models' summaries for this session):
 rm "summaries/${SESSION}--"*.md

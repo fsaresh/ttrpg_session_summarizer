@@ -53,11 +53,11 @@ MODEL_TAG="${MODEL//:/-}"
 
 # Glob first-pass summaries; skip any already-refined output ("--refined" suffix
 # before .md). Filter argument optional: only process summaries whose filename
-# starts with the given prefix.
+# contains the given text (e.g. "nature_" or a date).
 FILTER="${1:-}"
 shopt -s nullglob
 first_pass=()
-for f in "$MD_DIR/${FILTER}"*.md; do
+for f in "$MD_DIR/"*"${FILTER}"*.md; do
   case "$f" in
     *--refined.md) continue ;;
   esac

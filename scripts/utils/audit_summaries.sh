@@ -16,12 +16,12 @@ if [[ ! -d "$SUMMARIES_DIR" ]]; then
   exit 1
 fi
 
-# Filter argument (optional): only audit summaries whose filename starts with
-# the given prefix (e.g. "2026-05-05" or a session stem).
+# Filter argument (optional): only audit summaries whose filename contains
+# the given text (e.g. "nature_", "2026-05-05", or a session stem).
 FILTER="${1:-}"
 
 shopt -s nullglob
-md_files=("$SUMMARIES_DIR/${FILTER}"*.md)
+md_files=("$SUMMARIES_DIR/"*"${FILTER}"*.md)
 shopt -u nullglob
 
 if [[ ${#md_files[@]} -eq 0 ]]; then

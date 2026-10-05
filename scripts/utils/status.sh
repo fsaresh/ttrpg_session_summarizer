@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../_lib.sh"
 
-# Optional filter: pattern matched against session stems.
+# Optional filter: text matched anywhere in session stems (e.g. "nature_" or a date).
 FILTER="${1:-}"
 
 # Collect session stems from recordings/*.{mp4,mov} (preferred) and
@@ -19,14 +19,14 @@ FILTER="${1:-}"
 # de-dup by treating the set as a sorted unique list. nocaseglob so .MOV/.MP4
 # match too, matching Stage 1's glob.
 shopt -s nullglob nocaseglob
-videos=("$WORKSPACE_DIR/recordings/${FILTER}"*.mp4
-        "$WORKSPACE_DIR/recordings/${FILTER}"*.mov)
-audios=("$WORKSPACE_DIR/audio/${FILTER}"*.wav
-        "$WORKSPACE_DIR/audio/${FILTER}"*.m4a
-        "$WORKSPACE_DIR/audio/${FILTER}"*.mp3
-        "$WORKSPACE_DIR/audio/${FILTER}"*.flac
-        "$WORKSPACE_DIR/audio/${FILTER}"*.ogg
-        "$WORKSPACE_DIR/audio/${FILTER}"*.aac)
+videos=("$WORKSPACE_DIR/recordings/"*"${FILTER}"*.mp4
+        "$WORKSPACE_DIR/recordings/"*"${FILTER}"*.mov)
+audios=("$WORKSPACE_DIR/audio/"*"${FILTER}"*.wav
+        "$WORKSPACE_DIR/audio/"*"${FILTER}"*.m4a
+        "$WORKSPACE_DIR/audio/"*"${FILTER}"*.mp3
+        "$WORKSPACE_DIR/audio/"*"${FILTER}"*.flac
+        "$WORKSPACE_DIR/audio/"*"${FILTER}"*.ogg
+        "$WORKSPACE_DIR/audio/"*"${FILTER}"*.aac)
 shopt -u nullglob nocaseglob
 
 # Collect all stems then dedup-sort. (Avoiding bash 4 associative arrays
@@ -50,10 +50,10 @@ IFS=$'\n' sorted=($sorted_stems)
 unset IFS
 
 # Header.
-printf '%-26s  %s  %s  %s  %s  %s  %s\n' \
+printf '%-28s  %s  %s  %s  %s  %s  %s\n' \
   "session" "video" "audio" "srt" "txt" "md" "refined"
-printf '%-26s  %s  %s  %s  %s  %s  %s\n' \
-  "$(printf '%.0s-' {1..26})" "-----" "-----" "---" "---" "--" "-------"
+printf '%-28s  %s  %s  %s  %s  %s  %s\n' \
+  "$(printf '%.0s-' {1..28})" "-----" "-----" "---" "---" "--" "-------"
 
 mark() { [[ -e "$1" ]] && printf '%-3s' '  •' || printf '%-3s' '   '; }
 markn() { [[ -e "$1" ]] && printf '%-7s' '   •' || printf '%-7s' '       '; }
@@ -82,7 +82,7 @@ for stem in "${sorted[@]}"; do
   done
   shopt -u nullglob
 
-  printf '%-26s' "$stem"
+  printf '%-28s' "$stem"
   printf '  %s' "$([[ -n "$has_video" ]] && echo "•    " || echo "     ")"
   printf '  %s' "$([[ -n "$has_audio" ]] && echo "•    " || echo "     ")"
   printf '  %s' "$([[ -f "$srt" ]] && echo "•  " || echo "   ")"
