@@ -10,3 +10,7 @@ config/summary_prompt.txt
 config/refine_prompt.txt
 temp/
 .DS_Store
+config/*_names.txt
+config/*_name_variants.txt
+config/*_summary_prompt.txt
+config/*_refine_prompt.txt

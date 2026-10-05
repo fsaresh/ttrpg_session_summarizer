@@ -25,17 +25,14 @@ OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 NAMES_FILE="${NAMES_FILE:-$CONFIG_DIR/names.txt}"
 VARIANTS_FILE="${VARIANTS_FILE:-$CONFIG_DIR/name_variants.txt}"
 
-# System prompt is loaded from config/. Try the user's customized version
-# first, fall back to the shipped .example.txt.
+# System prompt: the session group's copy, then the user's customized version,
+# then the shipped .example.txt. See README "Session groups".
 REFINE_PROMPT_FILE="${REFINE_PROMPT_FILE:-$CONFIG_DIR/refine_prompt.txt}"
-if [[ ! -f "$REFINE_PROMPT_FILE" ]]; then
-  REFINE_PROMPT_FILE="$CONFIG_DIR/refine_prompt.example.txt"
-fi
-if [[ ! -f "$REFINE_PROMPT_FILE" ]]; then
+REFINE_PROMPT_EXAMPLE="$CONFIG_DIR/refine_prompt.example.txt"
+if [[ ! -f "$REFINE_PROMPT_FILE" && ! -f "$REFINE_PROMPT_EXAMPLE" ]]; then
   logerr "Error: no refine prompt found at $CONFIG_DIR/refine_prompt.{txt,example.txt}"
   exit 1
 fi
-REFINE_SYSTEM_PROMPT=$(<"$REFINE_PROMPT_FILE")
 
 if ! command -v jq >/dev/null 2>&1; then
   logerr "Error: jq not found. Install with: brew install jq"
@@ -70,22 +67,23 @@ if [[ ${#first_pass[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Build the canonical-names preamble; same shape as 4_summarize_session.sh so
+# Set NAMES_PREAMBLE and NAMES_TAIL; same shape as 4_summarize_session.sh so
 # the refiner uses the same name-normalization signal.
-NAMES_PREAMBLE=""
-NAMES_TAIL=""
-NAMES_LIST=$(read_names "$NAMES_FILE")
-if [[ -n "$NAMES_LIST" ]]; then
+#   set_names_wrapper "$names_list"
+set_names_wrapper() {
+  NAMES_PREAMBLE=""
+  NAMES_TAIL=""
+  [[ -n "$1" ]] || return 0
   NAMES_PREAMBLE="The transcript and draft below were produced by an automated speech-to-text pipeline and may contain mistranscriptions of names from this campaign. The following list is the canonical, authoritative spellings — these are the only acceptable forms. You MUST normalize every variant or near-spelling encountered to the canonical form shown here.
 
 Glossary:
-$NAMES_LIST
+$1
 
 "
   NAMES_TAIL="
 
 Reminder: every occurrence in your output of any name listed in the glossary above must use the canonical spelling, regardless of how the transcript or draft spelled it."
-fi
+}
 
 script_start=$(date +%s)
 log "Found ${#first_pass[@]} first-pass summary(s). Model: $MODEL  num_ctx ceiling: $NUM_CTX"
@@ -114,7 +112,11 @@ for draft in "${first_pass[@]}"; do
     continue
   fi
 
-  log "  ..    refining $base"
+  set_names_wrapper "$(session_names "$session_stem")"
+  prompt_file=$(session_prompt_file "$REFINE_PROMPT_FILE" "$REFINE_PROMPT_EXAMPLE" "$session_stem")
+  REFINE_SYSTEM_PROMPT=$(<"$prompt_file")
+
+  log "  ..    refining $base (prompt: $(basename "$prompt_file"))"
   file_start=$(date +%s)
 
   prompt_bytes=$(( ${#REFINE_SYSTEM_PROMPT} + ${#NAMES_PREAMBLE} + ${#NAMES_TAIL} + $(wc -c < "$draft") + $(wc -c < "$transcript") ))
@@ -143,7 +145,7 @@ for draft in "${first_pass[@]}"; do
     continue
   fi
 
-  printf '%s\n' "$content" | apply_name_variants "$VARIANTS_FILE" > "$dst.tmp" && mv "$dst.tmp" "$dst"
+  printf '%s\n' "$content" | apply_session_variants "$session_stem" > "$dst.tmp" && mv "$dst.tmp" "$dst"
   log "  ok    $(basename "$dst") ($(fmt_duration $(($(date +%s) - file_start))), num_ctx $ctx)"
   refined=$((refined + 1))
 done

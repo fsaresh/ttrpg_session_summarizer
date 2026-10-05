@@ -126,20 +126,85 @@ ollama_chat() {
 # ---------------------------------------------------------------------------
 
 # Read a names file, emitting one canonical name per line. Skips blanks and
-# lines starting with `#`. Trims surrounding whitespace. Missing file is
-# treated as empty (no output, no error).
-#   read_names "$NAMES_FILE"
+# lines starting with `#`. Trims surrounding whitespace. A leading `~` marks a
+# name to leave out of whisper's prompt (see README "Names glossary"): it is
+# stripped by default, and with --whisper those names are skipped. Missing
+# file is treated as empty (no output, no error).
+#   read_names "$NAMES_FILE" [--whisper]
 read_names() {
-  local file="$1"
+  local file="$1" whisper=0
+  [[ "${2:-}" == "--whisper" ]] && whisper=1
   [[ -f "$file" ]] || return 0
-  awk '
+  awk -v whisper="$whisper" '
     /^[[:space:]]*$/ { next }
     /^[[:space:]]*#/ { next }
     {
       gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+      if (sub(/^~[[:space:]]*/, "") && whisper) next
       print
     }
   ' "$file"
+}
+
+# Print the group of a session stem ("nature" for nature_2026-09-17_18-31-42),
+# or nothing if it has none. See README "Session groups".
+#   group=$(session_group "$stem")
+session_group() {
+  if [[ "$1" =~ ^([A-Za-z0-9][A-Za-z0-9_-]*)_[0-9]{4}-[0-9]{2}-[0-9]{2} ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  fi
+}
+
+# Print the group-specific path for a shared config file: names.txt for
+# group "nature" is nature_names.txt in the same directory. Prints nothing
+# for an empty group.
+#   group_file "$NAMES_FILE" "$group"
+group_file() {
+  if [[ -n "$2" ]]; then
+    printf '%s/%s_%s\n' "$(dirname "$1")" "$2" "$(basename "$1")"
+  fi
+}
+
+# Canonical names for a session: its group's glossary followed by the shared
+# one ($NAMES_FILE), without duplicates. Group names come first because
+# Stage 2 keeps only as many as fit in whisper's prompt. --whisper is passed
+# through to read_names.
+#   session_names "$stem" [--whisper]
+session_names() {
+  local group
+  group=$(session_group "$1")
+  {
+    if [[ -n "$group" ]]; then
+      read_names "$(group_file "$NAMES_FILE" "$group")" ${2:+"$2"}
+    fi
+    read_names "$NAMES_FILE" ${2:+"$2"}
+  } | awk '!seen[$0]++'
+}
+
+# Apply a session's variant rules to stdin: its group's file first, then the
+# shared $VARIANTS_FILE.
+#   apply_session_variants "$stem" <input >output
+apply_session_variants() {
+  local group
+  group=$(session_group "$1")
+  if [[ -n "$group" ]]; then
+    apply_name_variants "$(group_file "$VARIANTS_FILE" "$group")" | apply_name_variants "$VARIANTS_FILE"
+  else
+    apply_name_variants "$VARIANTS_FILE"
+  fi
+}
+
+# Print the prompt file for a session: its group's copy of $1 if present,
+# else $1, else the shipped example ($2). Prints nothing if none exist.
+#   session_prompt_file "$SUMMARY_PROMPT_FILE" "$CONFIG_DIR/summary_prompt.example.txt" "$stem"
+session_prompt_file() {
+  local f
+  for f in "$(group_file "$1" "$(session_group "$3")")" "$1" "$2"; do
+    if [[ -n "$f" && -f "$f" ]]; then
+      printf '%s\n' "$f"
+      return
+    fi
+  done
 }
 
 # Apply variant -> canonical name substitutions to stdin, writing to stdout.

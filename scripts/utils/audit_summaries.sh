@@ -29,14 +29,11 @@ if [[ ${#md_files[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Build the canonical list and the variant list once, share across all files.
-canon_tmp=$(mktemp)
-variant_tmp=$(mktemp)
-trap 'command rm -f "$canon_tmp" "$variant_tmp"' EXIT
-
-read_names "$NAMES_FILE" > "$canon_tmp"
-
-if [[ -f "$VARIANTS_FILE" ]]; then
+# Print the variant (left-hand) side of each rule in a variants file, keeping
+# any `!` (capitalized-only) prefix.
+#   variant_lefts "$file"
+variant_lefts() {
+  [[ -f "$1" ]] || return 0
   awk '
     /^[[:space:]]*$/ { next }
     /^[[:space:]]*#/ { next }
@@ -47,14 +44,17 @@ if [[ -f "$VARIANTS_FILE" ]]; then
       if (idx == 0) next
       from = substr($0, 1, idx - 1)
       sub(/[[:space:]]+$/, "", from)
-      if (substr(from, 1, 1) == "!") from = substr(from, 2)
       print from
     }
-  ' "$VARIANTS_FILE" > "$variant_tmp"
-fi
+  ' "$1"
+}
+
+canon_tmp=$(mktemp)
+variant_tmp=$(mktemp)
+trap 'command rm -f "$canon_tmp" "$variant_tmp"' EXIT
 
 log "Auditing ${#md_files[@]} summary(s)"
-log "Glossary: $NAMES_FILE | Variants: $VARIANTS_FILE"
+log "Glossary: $NAMES_FILE | Variants: $VARIANTS_FILE (plus each session group's files)"
 
 total_canonical_hits=0
 total_variant_hits=0
@@ -63,6 +63,14 @@ for f in "${md_files[@]}"; do
   base=$(basename "$f")
   log ""
   log "  $base"
+
+  # Each summary is checked against its session's glossary: shared + group.
+  stem="${base%%--*}"
+  session_names "$stem" > "$canon_tmp"
+  {
+    variant_lefts "$(group_file "$VARIANTS_FILE" "$(session_group "$stem")")"
+    variant_lefts "$VARIANTS_FILE"
+  } > "$variant_tmp"
 
   # Tally per file via perl: word-boundary, case-insensitive counts.
   CANON_FILE="$canon_tmp" VARIANT_FILE="$variant_tmp" SUMMARY_FILE="$f" perl -e '
@@ -86,8 +94,9 @@ for f in "${md_files[@]}"; do
     my $var_total = 0;
     my @var_hits;
     for my $v (@variant) {
+      my $cs = ($v =~ s/^!//);
       my $q = quotemeta($v);
-      my $count = () = $text =~ /\b$q\b/gi;
+      my $count = $cs ? (() = $text =~ /\b$q\b/g) : (() = $text =~ /\b$q\b/gi);
       $var_total += $count;
       push @var_hits, [$v, $count] if $count;
     }

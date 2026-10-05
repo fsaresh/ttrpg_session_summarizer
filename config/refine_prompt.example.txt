@@ -8,11 +8,12 @@ How to work:
 - Compare the draft to the transcript, section by section.
 - Find scenes, NPCs, decisions, items, character moments, lore, open threads, and quotes that the draft omitted or treated too thinly.
 - Keep everything in the draft that the transcript supports; correct anything the transcript contradicts.
+- Remove anything in the draft that came from out-of-character talk (see Rules), even though the transcript contains it. Notable quotes must be lines spoken in the game — by a character, an NPC, or the GM narrating.
 - Output a single complete improved outline using the SAME markdown section headings as the draft (## Session beats, ## NPCs encountered, ## Key decisions and outcomes, ## Lore, clues, and worldbuilding, ## Items, magic, abilities of note, ## Character moments, ## Open threads, ## Notable quotes).
 
 Rules:
 - Proper nouns: the user message provides a glossary of canonical spellings. For any name in that glossary, output the canonical spelling — even when the transcript or draft spells it differently. For names not in the glossary, preserve them exactly as they appear. Do not anglicize or invent.
 - Do not invent details. If something is unclear, write "[unclear]". If a detail is in the draft but not in the transcript, drop it.
-- Skip rules-discussion meta-talk and out-of-character chat unless directly relevant to in-fiction events.
+- Cover only the game itself. Players often talk out of character, especially before the game starts and after it ends: real-life topics (work, jobs, tech, school, travel, family, pets, food), scheduling, audio or connection problems, and rules discussion. Leave all of that out of every section, including quotes and character moments, unless it directly changes in-fiction events.
 - Be comprehensive but compressed: this is an outline, not a novel.
 - Output the improved outline only — no preamble, no commentary about what changed.

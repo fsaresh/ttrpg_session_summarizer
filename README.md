@@ -115,6 +115,19 @@ The utilities accept groups too:
 - `utils/status.sh`, `utils/refine_summary.sh`, and `utils/audit_summaries.sh` take an optional filter that matches anywhere in the name: `nature_`, a date, or a full session name.
 - `utils/clear_session.sh` takes a date (matches that date in any group) or `<group>_<date>`.
 
+### Per-group config
+
+Each config file in `config/` can have a group-specific companion named `<group>_<file>`, used only for that group's sessions:
+
+| Shared file (every session) | Group file (e.g. `nature_` sessions) | How they combine |
+|---|---|---|
+| `names.txt` | `nature_names.txt` | Group names first, then shared names. Both go to whisper and the LLM. |
+| `name_variants.txt` | `nature_name_variants.txt` | Group rules run first, then shared rules. |
+| `summary_prompt.txt` | `nature_summary_prompt.txt` | The group's prompt replaces the shared one. |
+| `refine_prompt.txt` | `nature_refine_prompt.txt` | The group's prompt replaces the shared one. |
+
+A group with no files of its own just uses the shared ones, so a new group works with no setup. A good split is each party's player characters and group-only places in the group file, and everything else in the shared file. One trade-off: if characters from one group show up in another group's session, that session doesn't get their glossary entries or spelling rules. For a recurring guest, add their name to the hosting group's file too. Group files are gitignored like the shared ones. `utils/lint_glossary.sh` checks every group's files, and `utils/audit_summaries.sh` checks each summary against its own group's glossary.
+
 ## Names glossary
 
 `config/names.txt` holds canonical spellings of campaign proper nouns (PCs, NPCs, locations, etc.). Both Stage 2 and Stage 4 use it to keep names consistent across runs:
@@ -124,7 +137,12 @@ The utilities accept groups too:
 
 **File format:** one name per line. Blank lines and `#`-comment lines are ignored. Add freely as new characters and locations enter play — a fuller glossary is strictly better.
 
-**Override path:** `NAMES_FILE=/path/to/other.txt ./pipeline/2_transcribe_audio.sh` (e.g., a per-group glossary).
+**Order matters for whisper.** whisper.cpp keeps at most about 223 prompt tokens and silently drops the *start* of anything longer. So Stage 2 adds names in order (group file first, then `names.txt` top to bottom) until `WHISPER_PROMPT_CHARS` is used up, and logs how many made it (`glossary: 52 of 64 names`). Put the names whisper most often gets wrong near the top. Stage 4's LLM always gets the full list.
+
+**Leaving names out of whisper's prompt.** Prefix a name with `~` (e.g. `~Crimson Hands`) to keep it out of whisper's prompt while the summarizer, spelling rules, linter, and auditor still treat it as a normal name. whisper's prompt only helps with *spelling*, so mark names whisper already gets right: plain English words, and longer forms of a name that's already listed (`~Armaments of Pharasma` when `Pharasma` is there). Capitalization (e.g. "Steve" for `STEVE`) is fixed later by the summarizer and the spelling rules. Leave unmarked any name that has a spelling rule (other than capitalization-only rules like `!Steve -> STEVE`), since the rule is evidence whisper gets it wrong. Don't try to save space by separating names with spaces instead of commas: that saves about one token per name, but in testing it made whisper drop sentences and fall into repetition loops.
+
+**Per-group glossaries:** see [Per-group config](#per-group-config).
+**Override path:** `NAMES_FILE=/path/to/other.txt ./pipeline/2_transcribe_audio.sh`.
 **Disable entirely:** `NAMES_FILE=/dev/null ./pipeline/...`
 
 ### Variant -> canonical post-pass
@@ -322,7 +340,8 @@ Reads `audio/*` (`.flac`, `.wav`, `.m4a`, `.mp3`, `.ogg`, `.aac`), writes `trans
 | `TEMPERATURE_INC` | `0.5` | Temperature increment on each fallback retry. Bigger jump = better chance of escaping a loop on the first retry. Default whisper.cpp value is `0.2`. |
 | `THREADS` | `8` | CPU thread count. Metal handles the heavy work on Apple Silicon; this mostly affects pre/post stages. |
 | `LANGUAGE` | `en` | Two-letter ISO 639-1 code passed to whisper-cli (`--language`). Set to `auto` for auto-detection (occasionally misfires on opening music/silence). |
-| `NAMES_FILE` | `config/names.txt` | Glossary of canonical proper nouns; passed to whisper.cpp via `--prompt`. See "Names glossary" above. |
+| `NAMES_FILE` | `config/names.txt` | Glossary of canonical proper nouns; passed to whisper.cpp via `--prompt`, along with the session group's `<group>_names.txt`. See "Names glossary" above. |
+| `WHISPER_PROMPT_CHARS` | `600` | Character budget for the glossary prompt, about 200 tokens. Names past the budget are left out of whisper's prompt (not the LLM's). Raising it past ~650 makes whisper drop the start of the prompt instead. |
 
 The script also passes `--suppress-nst` (suppress non-speech tokens) unconditionally — this kills off most repetition-loop hallucinations triggered by `[BLANK_AUDIO]` / `[MUSIC]` token attractors, with no downside for session-note synthesis.
 
@@ -352,7 +371,7 @@ Reads `transcripts/*.srt` (and `transcripts/*.json` if present), writes `transcr
 
 Reads `transcripts/*.txt`, writes `summaries/<session>--<model>.md` via a local LLM served by Ollama. The output filename includes the sanitized model tag (e.g. `nature_2026-04-21_19-51-46--qwen2.5-32b-instruct-q4_K_M.md`) so multiple models can summarize the same session without conflict — useful for A/B testing models against each other.
 
-The script bakes in a TTRPG-tuned system prompt that produces a structured outline with these sections: **Session beats / NPCs encountered / Key decisions and outcomes / Lore, clues, and worldbuilding / Items, magic, abilities of note / Character moments / Open threads / Notable quotes**. The prompt forbids invention and requires preserving all proper nouns verbatim.
+The script bakes in a TTRPG-tuned system prompt that produces a structured outline with these sections: **Session beats / NPCs encountered / Key decisions and outcomes / Lore, clues, and worldbuilding / Items, magic, abilities of note / Character moments / Open threads / Notable quotes**. The prompt forbids invention, requires preserving all proper nouns verbatim, and tells the model to leave out out-of-character talk (real-life chat, scheduling, tech trouble, rules discussion), including from quotes.
 
 **A/B testing models:** override `MODEL` per run; each model produces its own file alongside the others.
 

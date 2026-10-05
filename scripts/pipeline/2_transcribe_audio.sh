@@ -14,6 +14,8 @@ ENTROPY_THRESHOLD="${ENTROPY_THRESHOLD:-3.0}"
 TEMPERATURE_INC="${TEMPERATURE_INC:-0.5}"
 THREADS="${THREADS:-8}"
 NAMES_FILE="${NAMES_FILE:-$CONFIG_DIR/names.txt}"
+# whisper keeps at most ~223 prompt tokens; see README "Stage 2".
+WHISPER_PROMPT_CHARS="${WHISPER_PROMPT_CHARS:-600}"
 
 if ! command -v whisper-cli >/dev/null 2>&1; then
   logerr "Error: whisper-cli not found. Install with: brew install whisper-cpp"
@@ -42,20 +44,8 @@ if [[ ${#audio_files[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Build a glossary prompt from NAMES_FILE so whisper biases transcription
-# toward canonical spellings. --carry-initial-prompt makes the bias persist
-# across all 30s decode chunks instead of just the first one.
-WHISPER_PROMPT_ARGS=()
-NAMES_PROMPT=$(read_names "$NAMES_FILE" | paste -sd ', ' -)
-if [[ -n "$NAMES_PROMPT" ]]; then
-  WHISPER_PROMPT_ARGS=(--prompt "Glossary: $NAMES_PROMPT." --carry-initial-prompt)
-fi
-
 script_start=$(date +%s)
 log "Found ${#audio_files[@]} audio file(s). Model: $(basename "$MODEL_PATH")"
-if [[ -n "$NAMES_PROMPT" ]]; then
-  log "Glossary loaded from $NAMES_FILE ($(wc -w <<< "$NAMES_PROMPT" | tr -d ' ') words)"
-fi
 
 transcribed=0
 skipped=0
@@ -72,7 +62,24 @@ for src in "${audio_files[@]}"; do
     continue
   fi
 
-  log "  ..    transcribing $base"
+  # Glossary prompt (group names, then shared) biases whisper toward canonical
+  # spellings. `~`-marked names are left out; the rest are kept in order until
+  # the prompt budget runs out.
+  # --carry-initial-prompt keeps the prompt for every 30s chunk.
+  all_names=$(session_names "$stem" --whisper)
+  glossary=$(awk -v max="$WHISPER_PROMPT_CHARS" '
+    { len += (NR > 1 ? 2 : 0) + length($0); if (len > max) exit; out = out (NR > 1 ? ", " : "") $0 }
+    END { print out }' <<<"$all_names")
+  prompt_args=()
+  glossary_note=""
+  if [[ -n "$glossary" ]]; then
+    prompt_args=(--prompt "Glossary: $glossary." --carry-initial-prompt)
+    kept=$(awk -F", " '{ print NF }' <<<"$glossary")
+    total=$(wc -l <<<"$all_names" | tr -d ' ')
+    glossary_note=" (glossary: $kept of $total names)"
+  fi
+
+  log "  ..    transcribing $base$glossary_note"
   file_start=$(date +%s)
   if whisper-cli \
       --model "$MODEL_PATH" \
@@ -86,7 +93,7 @@ for src in "${audio_files[@]}"; do
       --entropy-thold "$ENTROPY_THRESHOLD" \
       --temperature-inc "$TEMPERATURE_INC" \
       --threads "$THREADS" \
-      "${WHISPER_PROMPT_ARGS[@]}"; then
+      ${prompt_args[@]+"${prompt_args[@]}"}; then
     log "  ok    $stem.srt ($(fmt_duration $(($(date +%s) - file_start))))"
     transcribed=$((transcribed + 1))
   else

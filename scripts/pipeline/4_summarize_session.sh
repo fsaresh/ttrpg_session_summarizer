@@ -17,17 +17,14 @@ OLLAMA_URL="${OLLAMA_URL:-http://localhost:11434}"
 NAMES_FILE="${NAMES_FILE:-$CONFIG_DIR/names.txt}"
 VARIANTS_FILE="${VARIANTS_FILE:-$CONFIG_DIR/name_variants.txt}"
 
-# System prompt is loaded from config/. Try the user's customized version
-# first, fall back to the shipped .example.txt.
+# System prompt: the session group's copy, then the user's customized version,
+# then the shipped .example.txt. See README "Session groups".
 SUMMARY_PROMPT_FILE="${SUMMARY_PROMPT_FILE:-$CONFIG_DIR/summary_prompt.txt}"
-if [[ ! -f "$SUMMARY_PROMPT_FILE" ]]; then
-  SUMMARY_PROMPT_FILE="$CONFIG_DIR/summary_prompt.example.txt"
-fi
-if [[ ! -f "$SUMMARY_PROMPT_FILE" ]]; then
+SUMMARY_PROMPT_EXAMPLE="$CONFIG_DIR/summary_prompt.example.txt"
+if [[ ! -f "$SUMMARY_PROMPT_FILE" && ! -f "$SUMMARY_PROMPT_EXAMPLE" ]]; then
   logerr "Error: no summary prompt found at $CONFIG_DIR/summary_prompt.{txt,example.txt}"
   exit 1
 fi
-SYSTEM_PROMPT=$(<"$SUMMARY_PROMPT_FILE")
 
 if ! command -v jq >/dev/null 2>&1; then
   logerr "Error: jq not found. Install with: brew install jq"
@@ -56,17 +53,18 @@ fi
 # separator, which is awkward in filenames on some tools/shells).
 MODEL_TAG="${MODEL//:/-}"
 
-# Build a canonical-names preamble that gets prepended to each transcript so
-# the model normalizes any variant spellings it sees. Empty if NAMES_FILE
-# is missing or empty.
-NAMES_PREAMBLE=""
-NAMES_TAIL=""
-NAMES_LIST=$(read_names "$NAMES_FILE")
-if [[ -n "$NAMES_LIST" ]]; then
+# Set NAMES_PREAMBLE and NAMES_TAIL, which wrap a transcript so the model
+# normalizes any variant spellings it sees. Both are empty when the session
+# has no glossary names.
+#   set_names_wrapper "$names_list"
+set_names_wrapper() {
+  NAMES_PREAMBLE=""
+  NAMES_TAIL=""
+  [[ -n "$1" ]] || return 0
   NAMES_PREAMBLE="The transcript below was produced by an automated speech-to-text system and contains many mistranscriptions of names from this campaign. The following list is the canonical, authoritative spellings — these are the only acceptable forms. You MUST normalize every variant, homophone, or near-spelling encountered in the transcript to the canonical form shown here. For example, if the transcript writes \"Phoenix\" but the glossary lists \"Phaenix\", output \"Phaenix\". Do not preserve transcript variants of glossary names; do not invent new variants. Names not in the glossary should be preserved as written.
 
 Glossary:
-$NAMES_LIST
+$1
 
 Transcript follows.
 
@@ -74,13 +72,10 @@ Transcript follows.
   NAMES_TAIL="
 
 End of transcript. Reminder: every occurrence in your output of any name listed in the glossary above must use the canonical spelling, regardless of how the transcript spelled it."
-fi
+}
 
 script_start=$(date +%s)
 log "Found ${#txt_files[@]} cleaned transcript(s). Model: $MODEL  num_ctx ceiling: $NUM_CTX"
-if [[ -n "$NAMES_LIST" ]]; then
-  log "Glossary loaded from $NAMES_FILE ($(wc -l <<< "$NAMES_LIST" | tr -d ' ') names)"
-fi
 
 summarized=0
 skipped=0
@@ -97,7 +92,12 @@ for src in "${txt_files[@]}"; do
     continue
   fi
 
-  log "  ..    summarizing $base.txt"
+  names_list=$(session_names "$base")
+  set_names_wrapper "$names_list"
+  prompt_file=$(session_prompt_file "$SUMMARY_PROMPT_FILE" "$SUMMARY_PROMPT_EXAMPLE" "$base")
+  SYSTEM_PROMPT=$(<"$prompt_file")
+
+  log "  ..    summarizing $base.txt (prompt: $(basename "$prompt_file")${names_list:+, glossary: $(wc -l <<<"$names_list" | tr -d ' ') names})"
   file_start=$(date +%s)
 
   prompt_bytes=$(( ${#SYSTEM_PROMPT} + ${#NAMES_PREAMBLE} + ${#NAMES_TAIL} + $(wc -c < "$src") ))
@@ -125,7 +125,7 @@ for src in "${txt_files[@]}"; do
     continue
   fi
 
-  printf '%s\n' "$content" | apply_name_variants "$VARIANTS_FILE" > "$dst.tmp" && mv "$dst.tmp" "$dst"
+  printf '%s\n' "$content" | apply_session_variants "$base" > "$dst.tmp" && mv "$dst.tmp" "$dst"
   log "  ok    $dst_name ($(fmt_duration $(($(date +%s) - file_start))), num_ctx $ctx)"
   summarized=$((summarized + 1))
 done

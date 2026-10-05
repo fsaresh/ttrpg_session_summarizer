@@ -93,6 +93,8 @@ Don't add new directories without checking with the user — they previously rej
 
 Everything under `config/` follows the same template + actual pattern: `<name>.example.{txt,conf}` is tracked in git (the shipped default), `<name>.{txt,conf}` is gitignored (the user's customization). Five pairs in total: `names`, `name_variants`, `summary_prompt`, `refine_prompt`, `settings`. The first two are pure data; the prompt files are loaded by the summarizer/refiner with fallback to `.example.txt` when the actual is absent; `settings.conf` is sourced from `_lib.sh` if present.
 
+The glossary and prompt files can also have per-session-group companions named `<group>_<file>` (e.g. `nature_names.txt`), also gitignored, loaded by the `session_*` helpers in `_lib.sh` (see README "Per-group config"). New code that reads `names.txt`, `name_variants.txt`, or a prompt file for a specific session should go through those helpers (`session_names`, `apply_session_variants`, `session_prompt_file`) instead of reading the shared file directly.
+
 **Don't propagate template-file edits to the actuals (or vice versa) without explicit user direction.** The `.example.*` is the maintainer's shipped default; the `.txt`/`.conf` is per-user data. They have different roles. The README's "Customizing for your campaign" section is the operator-facing version.
 
 ## Things to ask about, not assume

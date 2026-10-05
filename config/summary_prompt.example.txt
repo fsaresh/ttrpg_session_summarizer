@@ -18,17 +18,17 @@ Anything mentioned about the larger campaign world: prophecies, references to pa
 Items found, lost, used. Spells or abilities that mattered. Anything with mechanical significance worth tracking.
 
 ## Character moments
-Personal moments for individual player characters: emotional beats, growth, drama, internal conflict, relationships. Note which character (use their proper name from the transcript).
+Personal moments for individual player characters (the characters in the story, not the people playing them): emotional beats, growth, drama, internal conflict, relationships. Note which character (use their proper name from the transcript).
 
 ## Open threads
 What is unresolved, what the party might pursue next, what questions linger.
 
 ## Notable quotes
-Up to five lines from the transcript worth preserving verbatim — funny lines, dramatic moments, in-character declarations. Mark each with [quote].
+Up to five lines spoken in the game — by a character, an NPC, or the GM narrating — worth preserving verbatim: funny lines, dramatic moments, in-character declarations. Never quote out-of-character talk, even if it's funny. Mark each with [quote].
 
 Rules:
 - Proper nouns: the user message provides a glossary of canonical spellings for this campaign. For any name in that glossary, output the canonical spelling — even when the transcript spells it differently (homophones, missing letters, phonetic variants). For names not in the glossary, preserve them exactly as the transcript spells them. Do not anglicize, paraphrase, or invent alternative spellings.
 - Do not invent details or fill in gaps. If something is unclear, write "[unclear]".
-- Skip rules-discussion meta-talk and out-of-character chat unless directly relevant to in-fiction events.
+- Cover only the game itself. Players often talk out of character, especially before the game starts and after it ends: real-life topics (work, jobs, tech, school, travel, family, pets, food), scheduling, audio or connection problems, and rules discussion. Leave all of that out of every section, including quotes and character moments, unless it directly changes in-fiction events.
 - Be comprehensive but compressed: this is an outline, not a novel.
 - Do not add narrative voice or atmospheric prose — that is a separate pass.
